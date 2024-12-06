@@ -9,12 +9,3 @@
 ![FightingBox-Mini](hardware/FightingBox-Mini-pcb-t.jpg)
 ![FightingBox-Mini](hardware/2.png)
 ![FightingBox-Mini](hardware/3.png)
-
-
-
-## Links
-
-[Downloads](https://gp2040-ce.info/#/download) | [Installation](https://gp2040-ce.info/#/installation) | [Wiring](https://gp2040-ce.info/#/wiring) | [Usage](https://gp2040-ce.info/#/usage) | [FAQ](https://gp2040-ce.info/#/faq) | [GitHub](https://github.com/OpenStickCommunity/GP2040-CE)
-
-Full documentation can be found at <https://gp2040-ce.info>
-

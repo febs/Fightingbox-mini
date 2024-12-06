@@ -1,14 +1,30 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { AppContext } from '../Contexts/AppContext';
-import { Badge, Button, Col, Form, Nav, OverlayTrigger, Row, Tab, Table, Tooltip } from 'react-bootstrap';
+import {
+	Badge,
+	Button,
+	Col,
+	Form,
+	InputGroup,
+	Nav,
+	OverlayTrigger,
+	Row,
+	Tab,
+	Table,
+	Tooltip,
+} from 'react-bootstrap';
 import { Formik, useFormikContext } from 'formik';
 import * as yup from 'yup';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import omit from 'lodash/omit';
 
 import Section from '../Components/Section';
 import WebApi from '../Services/WebApi';
-import { getButtonLabels, BUTTONS, BUTTON_MASKS } from '../Data/Buttons';
+import {
+	getButtonLabels,
+	BUTTONS,
+	BUTTON_MASKS_OPTIONS,
+} from '../Data/Buttons';
 
 const MACRO_TYPES = [
 	{ label: 'InputMacroAddon:input-macro-type.press', value: 1 },
@@ -44,9 +60,9 @@ const MACRO_INPUTS_MAX = 30;
 const MACRO_LIMIT = 6;
 
 const defaultMacroInput = {
-    buttonMask: 0,
-    duration: 16666,
-    waitDuration: 0
+	buttonMask: 0,
+	duration: 16666,
+	waitDuration: 0,
 };
 
 const defaultValues = {
@@ -64,25 +80,7 @@ const defaultValues = {
 	macroBoardLedEnabled: 0,
 };
 
-const EMPTY_INPUT = null;
-
 const ONE_FRAME_US = 16666;
-
-const filterMacroInputs = (values) => {
-	let updated = false;
-	const newValues = {
-		...values,
-		macroList: values.macroList.map((a) => {
-			a.macroInputs = a.macroInputs.filter((i) => {
-				const keep = i !== EMPTY_INPUT;
-				updated = updated && !keep;
-				return keep;
-			});
-			return a;
-		}),
-	};
-	return updated ? newValues : values;
-};
 
 const FormContext = () => {
 	const { values, setValues } = useFormikContext();
@@ -98,13 +96,6 @@ const FormContext = () => {
 		}
 		fetchData();
 	}, [setValues]);
-/*
-	useEffect(() => {
-		async function setData() {
-			await setValues(filterMacroInputs(values));
-		}
-		setData();
-	}, [values, setValues]);*/
 
 	return null;
 };
@@ -118,27 +109,26 @@ const ButtonMasksComponent = (props) => {
 		isInvalid,
 		className,
 		buttonLabelType,
-		buttonMasks
+		buttonMasks,
 	} = props;
 	return (
-		<div key={key} className={className}>
-			<Form.Select
-				size="sm"
-				name={`${key}.buttonMask`}
-				className="form-control col-sm-auto"
-				groupClassName="col-sm-1"
-				value={value}
-				error={error}
-				isInvalid={isInvalid}
-				onChange={onChange}
-			>
-				{buttonMasks.map((o, i2) => (
-					<option key={`${key}.mask[${i2}]`} value={o.value}>
-						{(buttonLabelType && BUTTONS[buttonLabelType][o.label]) || o.label}
-					</option>
-				))}
-			</Form.Select>
-		</div>
+		// <div key={key} className={className}>
+		<Form.Select
+			size="sm"
+			name={`${key}.buttonMask`}
+			// className="form-control"
+			value={value}
+			error={error}
+			isInvalid={isInvalid}
+			onChange={onChange}
+		>
+			{buttonMasks.map((o, i2) => (
+				<option key={`${key}.mask[${i2}]`} value={o.value}>
+					{(buttonLabelType && BUTTONS[buttonLabelType][o.label]) || o.label}
+				</option>
+			))}
+		</Form.Select>
+		// </div>
 	);
 };
 
@@ -152,20 +142,16 @@ const MacroInputComponent = (props) => {
 		errors,
 		id: key,
 		translation: t,
+		deleteMacroInput,
 		setFieldValue,
 	} = props;
 
 	return (
-		<Row key={key} className="py-2 flex-nowrap">
-			<Col style={{
-				'minWidth': '150px',
-				'maxWidth': '150px',
-			}}>
-				<Row className="d-flex justify-content-center">
-					<Col sm={6} className="px-0">
+		<Row className="align-content-start align-items-center row-gap-2 pb-2">
+			<Col xs="auto" style={{ width: 180 }}>
+				<InputGroup size="sm">
 					<Form.Control
 						className="text-center"
-						size="sm"
 						type="number"
 						placeholder={t('InputMacroAddon:input-macro-duration-label')}
 						name={`${key}.duration`}
@@ -180,74 +166,59 @@ const MacroInputComponent = (props) => {
 							);
 						}}
 						min={0}
-					/></Col>
-					<Col sm={5} className="px-1 text-nowrap">
-					{t(
-						showFrames
-							? 'InputMacroAddon:input-macro-time-label-frames'
-							: 'InputMacroAddon:input-macro-time-label-ms',
-					)}
-					</Col>
-				</Row>
+					/>
+					<InputGroup.Text>
+						{t(
+							showFrames
+								? 'InputMacroAddon:input-macro-time-label-frames'
+								: 'InputMacroAddon:input-macro-time-label-ms',
+						)}
+					</InputGroup.Text>
+				</InputGroup>
 			</Col>
-			<Col sm={"auto"} key={`${key}.buttons`}>
-				<Row className="d-flex justify-content-center">
-					{BUTTON_MASKS.map((mask, i1) =>
-						buttonMask & mask.value ? (
-						<Col sm={"auto"} className="px-1">
-							<ButtonMasksComponent
-								key={`${key}.buttonMask[${i1}]`}
-								id={`${key}.buttonMask[${i1}]`}
-								value={buttonMask & mask.value}
-								onChange={(e) => {
-									setFieldValue(
-										`${key}.buttonMask`,
-										(buttonMask ^ mask.value) | e.target.value,
-									);
-								}}
-								error={errors?.buttonMask}
-								isInvalid={errors?.buttonMask}
-								translation={t}
-								buttonLabelType={buttonLabelType}
-								buttonMasks={BUTTON_MASKS}
-							/>
-						</Col>) : (
-							<></>
-						),
-					)}
-					<Col sm={"auto"} className="px-1"
-						key={`${key}.buttonMask[placeholder]`}
-					>
+			{BUTTON_MASKS_OPTIONS.filter((mask) => buttonMask & mask.value).map(
+				(mask, i1) => (
+					<Col xs="auto" key={`${key}.buttonMask[${i1}]`}>
 						<ButtonMasksComponent
-							key={`${key}.buttonMaskPlaceholder`}
-							id={`${key}.buttonMaskPlaceholder`}
-							className="col-sm-auto"
-							value={0}
+							id={`${key}.buttonMask[${i1}]`}
+							value={buttonMask & mask.value}
 							onChange={(e) => {
-								setFieldValue(`${key}.buttonMask`, buttonMask | e.target.value);
+								setFieldValue(
+									`${key}.buttonMask`,
+									(buttonMask ^ mask.value) | e.target.value,
+								);
 							}}
 							error={errors?.buttonMask}
 							isInvalid={errors?.buttonMask}
 							translation={t}
 							buttonLabelType={buttonLabelType}
-							buttonMasks={BUTTON_MASKS}
+							buttonMasks={BUTTON_MASKS_OPTIONS}
 						/>
 					</Col>
-				</Row>
+				),
+			)}
+			<Col xs="auto">
+				<ButtonMasksComponent
+					id={`${key}.buttonMaskPlaceholder`}
+					className="col-sm-auto"
+					value={0}
+					onChange={(e) => {
+						setFieldValue(`${key}.buttonMask`, buttonMask | e.target.value);
+					}}
+					error={errors?.buttonMask}
+					isInvalid={errors?.buttonMask}
+					translation={t}
+					buttonLabelType={buttonLabelType}
+					buttonMasks={BUTTON_MASKS_OPTIONS}
+				/>
 			</Col>
-			<Col style={{
-				'minWidth': '125px',
-				'maxWidth': '125px',
-			}} className="d-flex justify-content-center text-nowrap"> release and wait </Col>
-			<Col style={{
-				'minWidth': '150px',
-				'maxWidth': '150px',
-			}}>
-				<Row className="d-flex justify-content-center">
-					<Col sm={6} className="px-0">
+			<Col xs="auto" style={{ width: 290 }}>
+				<InputGroup size="sm">
+					<InputGroup.Text>
+						{t('InputMacroAddon:input-macro-release-and-wait-label')}
+					</InputGroup.Text>
 					<Form.Control
-						className="text-center"
-						size="sm"
+						className="text-center d-flex"
 						type="number"
 						placeholder={t('InputMacroAddon:input-macro-wait-duration-label')}
 						name={`${key}.waitDuration`}
@@ -263,32 +234,29 @@ const MacroInputComponent = (props) => {
 						}}
 						min={0}
 					/>
-					</Col>
-					<Col sm={5} className="px-1 text-nowrap">
-					{t(
-						showFrames
-							? 'InputMacroAddon:input-macro-time-label-frames'
-							: 'InputMacroAddon:input-macro-time-label-ms',
-					)}
-					</Col>
-					<Col sm={1} className="px-0 text-nowrap">
-						<OverlayTrigger
-							placement="right"
-							overlay={tooltip}
-							delay={{ show: 500, hide: 100 }}
-						>
-							<Button
-								variant="transparent"
-								size="sm"
-								onDoubleClick={(e) => {
-									setFieldValue(key, EMPTY_INPUT);
-								}}
-							>
-								💥
-							</Button>
-						</OverlayTrigger>
-					</Col>
-				</Row>
+					<InputGroup.Text>
+						{t(
+							showFrames
+								? 'InputMacroAddon:input-macro-time-label-frames'
+								: 'InputMacroAddon:input-macro-time-label-ms',
+						)}
+					</InputGroup.Text>
+				</InputGroup>
+			</Col>
+			<Col xs="auto">
+				<OverlayTrigger
+					placement="right"
+					overlay={tooltip}
+					delay={{ show: 500, hide: 100 }}
+				>
+					<Button
+						variant="transparent"
+						size="sm"
+						onDoubleClick={deleteMacroInput}
+					>
+						💥
+					</Button>
+				</OverlayTrigger>
 			</Col>
 		</Row>
 	);
@@ -313,15 +281,15 @@ const MacroComponent = (props) => {
 		translation: t,
 		index,
 		buttonLabelType,
+		deleteMacroInput,
 		setFieldValue,
 		macroList,
 	} = props;
 
-	const filteredMacroInputs = macroInputs.filter((i) => i !== EMPTY_INPUT);
 	return (
 		<div key={key}>
 			<Row>
-				<Col sm={"auto"}>
+				<Col sm={'auto'}>
 					<Form.Check
 						name={`${key}.enabled`}
 						label={t('InputMacroAddon:input-macro-macro-enabled')}
@@ -336,10 +304,8 @@ const MacroComponent = (props) => {
 				</Col>
 			</Row>
 			<Row className="my-2">
-				<Col sm={"auto"}>
-					Macro Name:
-				</Col>
-				<Col sm={"auto"}>
+				<Col sm={'auto'}>{t('InputMacroAddon:macro-name')}:</Col>
+				<Col sm={'auto'}>
 					<Form.Control
 						size="sm"
 						type="text"
@@ -354,14 +320,13 @@ const MacroComponent = (props) => {
 				</Col>
 			</Row>
 			<Row className="my-2">
-				<Col sm={"auto"} mb={2}>
-					Macro Activation Type:
+				<Col sm={'auto'} mb={2}>
+					{t('InputMacroAddon:macro-activation-type')}:
 				</Col>
-				<Col sm={"auto"}>
+				<Col sm={'auto'}>
 					<Form.Select
 						name={`${key}.macroType`}
 						className="form-select-sm sm-1"
-						groupClassName="mb-3"
 						value={macroType}
 						onChange={(e) => {
 							setFieldValue(`${key}.macroType`, parseInt(e.target.value));
@@ -375,10 +340,10 @@ const MacroComponent = (props) => {
 					</Form.Select>
 				</Col>
 			</Row>
-			
+
 			<hr className="mt-3" />
 			<Row>
-				<Col sm={"auto"}>
+				<Col sm={'auto'}>
 					<Form.Check
 						name={`${key}.interruptible`}
 						label={t('InputMacroAddon:input-macro-macro-interruptible')}
@@ -393,7 +358,7 @@ const MacroComponent = (props) => {
 				</Col>
 			</Row>
 			<Row>
-				<Col sm={"auto"}>
+				<Col sm={'auto'}>
 					<Form.Check
 						name={`${key}.exclusive`}
 						label={t('InputMacroAddon:input-macro-macro-exclusive')}
@@ -409,7 +374,7 @@ const MacroComponent = (props) => {
 				</Col>
 			</Row>
 			<Row mt={2} className="align-items-center">
-				<Col sm={"auto"}>
+				<Col sm={'auto'}>
 					<Form.Check
 						name={`${key}.useMacroTriggerButton`}
 						label={t('InputMacroAddon:input-macro-macro-uses-buttons')}
@@ -427,14 +392,14 @@ const MacroComponent = (props) => {
 				</Col>
 				{useMacroTriggerButton == true && (
 					<Row>
-						<Col sm={"auto"}>
+						<Col sm={'auto'}>
 							{t('InputMacroAddon:input-macro-macro-button-pin-plus')}
 						</Col>
-						<Col sm={"auto"}>
+						<Col sm={'auto'}>
 							<ButtonMasksComponent
 								className="col-sm-auto"
 								value={macroTriggerButton}
-								onChange={(e) => {	
+								onChange={(e) => {
 									setFieldValue(
 										`${key}.macroTriggerButton`,
 										parseInt(e.target.value),
@@ -442,10 +407,14 @@ const MacroComponent = (props) => {
 								}}
 								buttonLabelType={buttonLabelType}
 								translation={t}
-								buttonMasks={BUTTON_MASKS.filter((b, i) =>
-									macroList.find((m, macroIdx) =>
-										index != macroIdx && m.useMacroTriggerButton && (m.macroTriggerButton === b.value)
-									) === undefined
+								buttonMasks={BUTTON_MASKS_OPTIONS.filter(
+									(b, i) =>
+										macroList.find(
+											(m, macroIdx) =>
+												index != macroIdx &&
+												m.useMacroTriggerButton &&
+												m.macroTriggerButton === b.value,
+										) === undefined,
 								)}
 							/>
 						</Col>
@@ -454,7 +423,7 @@ const MacroComponent = (props) => {
 			</Row>
 			<hr className="mt-3" />
 			<Row>
-				<Col sm={"auto"}>
+				<Col sm={'auto'}>
 					<Form.Check
 						name={`${key}.showFrames`}
 						label={t('InputMacroAddon:input-macro-macro-show-frames')}
@@ -469,15 +438,16 @@ const MacroComponent = (props) => {
 				</Col>
 			</Row>
 			<Row>
-				{filteredMacroInputs.map((input, a) => (
+				{macroInputs.map((macroInput, a) => (
 					<MacroInputComponent
 						key={`${key}.macroInputs[${a}]`}
 						id={`${key}.macroInputs[${a}]`}
-						value={filteredMacroInputs?.at(a)}
-						errors={errors?.filteredMacroInputs?.at(a)}
+						value={macroInput}
+						errors={errors?.macroInputs?.at(a)}
 						showFrames={showFrames}
 						translation={t}
 						buttonLabelType={buttonLabelType}
+						deleteMacroInput={() => deleteMacroInput(a)}
 						handleChange={handleChange}
 						setFieldValue={setFieldValue}
 					/>
@@ -485,23 +455,25 @@ const MacroComponent = (props) => {
 			</Row>
 			<Row>
 				<Col sm={3}>
-				{macroInputs.length < MACRO_INPUTS_MAX ? (
-					<Button
-						variant="success"
-						className="col px-2"
-						size="sm"
-						onClick={() => {
-							setFieldValue(
-								`${key}.macroInputs[${filteredMacroInputs.length}]`,
-								{ ...defaultMacroInput },
-							);
-						}}
-					>
-						Add Input +
-					</Button>
-				) : (
-					<></>
-				)}
+					{macroInputs.length < MACRO_INPUTS_MAX ? (
+						<Button
+							variant="success"
+							className="col px-2"
+							size="sm"
+							onClick={() => {
+								setFieldValue(`${key}.macroInputs[${macroInputs.length}]`, {
+									...defaultMacroInput,
+								});
+							}}
+						>
+							<Trans
+								ns="InputMacroAddon"
+								i18nKey="input-macro-add-input-label"
+							/>
+						</Button>
+					) : (
+						<></>
+					)}
 				</Col>
 			</Row>
 		</div>
@@ -513,9 +485,7 @@ export default function MacrosPage() {
 	const [saveMessage, setSaveMessage] = useState('');
 
 	const saveSettings = async (values) => {
-		const success = await WebApi.setMacroAddonOptions(
-			filterMacroInputs(values),
-		);
+		const success = await WebApi.setMacroAddonOptions(values);
 		setSaveMessage(
 			success
 				? t('Common:saved-success-message')
@@ -531,7 +501,6 @@ export default function MacrosPage() {
 
 	const { t } = useTranslation('');
 
-
 	const handleCheckbox = async (name, values) => {
 		values[name] = values[name] === 1 ? 0 : 1;
 	};
@@ -542,101 +511,193 @@ export default function MacrosPage() {
 			onSubmit={onSuccess}
 			initialValues={defaultValues}
 		>
-			{({ handleSubmit, handleChange, values, errors, setFieldValue }) =>
-				(
-					<div>
-						<Form noValidate onSubmit={handleSubmit}>
-							<Tab.Container defaultActiveKey="settings">
-									<Row>
-									<Col sm={2}>
-										<Nav variant="pills" className="flex-column text-nowrap">
-											<Nav.Item key="pills-header">
-												<Nav.Link eventKey="settings">{t('InputMacroAddon:input-macro-header-text')}</Nav.Link>
+			{({
+				handleSubmit,
+				handleChange,
+				values,
+				errors,
+				setFieldValue,
+				setValues,
+			}) => (
+				<div>
+					<Form noValidate onSubmit={handleSubmit}>
+						<Tab.Container defaultActiveKey="settings">
+							<Row>
+								<Col md={3}>
+									<Nav variant="pills" className="flex-column text-nowrap">
+										<Nav.Item key="pills-header">
+											<Nav.Link eventKey="settings">
+												{t('InputMacroAddon:input-macro-header-text')}
+											</Nav.Link>
+										</Nav.Item>
+										{values.macroList.map((macro, i) => (
+											<Nav.Item key={`pills-item-${i}`}>
+												<Nav.Link eventKey={`macro-${i}`}>
+													{macro.macroLabel.length == 0
+														? t('InputMacroAddon:input-macro-macro-list-txt', {
+																macroNumber: i + 1,
+															})
+														: macro.macroLabel.length > 24
+															? macro.macroLabel.substr(0, 24) + '...'
+															: macro.macroLabel}
+												</Nav.Link>
 											</Nav.Item>
-											{values.macroList.map((macro, i) => (
-												<Nav.Item key={`pills-item-${i}`}>
-													<Nav.Link eventKey={`macro-${i}`}>
-														{macro.macroLabel.length == 0 ? `Macro ${i+1}` :
-															macro.macroLabel.length > 24 ?
-																macro.macroLabel.substr(0, 24) + "..." :
-																	macro.macroLabel}
-													</Nav.Link>
-												</Nav.Item>
-											))}
-										</Nav>
-									</Col>
-									<Col sm={10}>
+										))}
+									</Nav>
+								</Col>
+								<Col md={9}>
 									<Tab.Content>
 										<Tab.Pane eventKey="settings">
-											<Section title={t('InputMacroAddon:input-macro-header-text')}>
-											<Row>
-												<Col>
-												<Table striped bordered hover className="text-center">
-												<thead>
-												<tr>
-													<th>#</th>
-													<th>Label</th>
-													<th>Type</th>
-													<th>Assigned To</th>
-													<th>Button</th>
-													<th>Actions</th>
-													<th>Status</th>
-												</tr>
-												</thead>
-												<tbody>
-											{values.macroList.map((macro, i) => (
-												<tr>
-													<td>{i+1}</td>
-													<td>{macro.macroLabel.length==0 && <em>None</em>}{macro.macroLabel.length>0 && macro.macroLabel.slice(0,32)}{macro.macroLabel.length>32 && "..."}</td>
-													<td>{t(MACRO_TYPES.find((m) => m.value === macro.macroType).label)}</td>
-													<td>{macro.useMacroTriggerButton==1 ? "Button" : "Pin"}</td>
-													{macro.useMacroTriggerButton ==0 ? <td><em>---</em></td> :
-															<td>{`${BUTTON_MASKS.find((b) => b.value == macro.macroTriggerButton).label}`}</td>}
-													<td>{macro.macroInputs.length}</td>
-													<td>{macro.enabled==true ? <Badge bg="success">Enabled</Badge> : <Badge bg="danger">Disabled</Badge>}</td>
-												</tr>
-											))}
-												</tbody>
-											</Table>
-											</Col></Row>
-											<hr className="mt-3" />
-											<Row>
-												<Col>
-													<Form.Label>
-														<em>{t('InputMacroAddon:input-macro-sub-header')}</em>
-													</Form.Label>
-												</Col>
-											</Row>
-											<Row>
-												<Col sm={10}>
-												<Form.Check
-													label={t('InputMacroAddon:input-macro-board-led-enabled')}
-													type="switch"
-													id="InputMacroAddonBoardLed"
-													isInvalid={false}
-													checked={Boolean(values.macroBoardLedEnabled)}
-													onChange={(e) => {
-														handleCheckbox('macroBoardLedEnabled', values);
-														handleChange(e);
-													}}
-												/>
-												</Col>
-											</Row>
-											<hr className="mt-3" />
-											<Row>
-												<Col sm={10}>
-												<Button type="submit">{t('Common:button-save-label')}</Button>
-												{saveMessage ? (
-													<span className="alert">{saveMessage}</span>
-												) : null}
-												</Col>
-											</Row>
-										</Section>
+											<Section
+												title={t('InputMacroAddon:input-macro-header-text')}
+											>
+												<Row>
+													<Col>
+														<Table
+															striped
+															bordered
+															hover
+															className="text-center"
+														>
+															<thead>
+																<tr>
+																	<th>#</th>
+																	<th>
+																		{t('InputMacroAddon:table-thread-label')}
+																	</th>
+																	<th>
+																		{t('InputMacroAddon:table-thread-type')}
+																	</th>
+																	<th>
+																		{t(
+																			'InputMacroAddon:table-thread-assigned-to',
+																		)}
+																	</th>
+																	<th>
+																		{t('InputMacroAddon:table-thread-button')}
+																	</th>
+																	<th>
+																		{t('InputMacroAddon:table-thread-actions')}
+																	</th>
+																	<th>
+																		{t('InputMacroAddon:table-thread-status')}
+																	</th>
+																</tr>
+															</thead>
+															<tbody>
+																{values.macroList.map((macro, i) => (
+																	<tr key={`macro-list-item-${i}`}>
+																		<td>{i + 1}</td>
+																		<td>
+																			{macro.macroLabel.length == 0 && (
+																				<em>None</em>
+																			)}
+																			{macro.macroLabel.length > 0 &&
+																				macro.macroLabel.slice(0, 32)}
+																			{macro.macroLabel.length > 32 && '...'}
+																		</td>
+																		<td>
+																			{t(
+																				MACRO_TYPES.find(
+																					(m) => m.value === macro.macroType,
+																				).label,
+																			)}
+																		</td>
+																		<td>
+																			{macro.useMacroTriggerButton == 1
+																				? t(
+																						'InputMacroAddon:input-macro-macro-trigger-type-button',
+																					)
+																				: t(
+																						'InputMacroAddon:input-macro-macro-trigger-type-pin',
+																					)}
+																		</td>
+																		{macro.useMacroTriggerButton == 0 ? (
+																			<td>
+																				<em>---</em>
+																			</td>
+																		) : (
+																			<td>{`${
+																				BUTTON_MASKS_OPTIONS.find(
+																					(b) =>
+																						b.value == macro.macroTriggerButton,
+																				).label
+																			}`}</td>
+																		)}
+																		<td>{macro.macroInputs.length}</td>
+																		<td>
+																			{macro.enabled == true ? (
+																				<Badge bg="success">
+																					{t(
+																						'InputMacroAddon:input-macro-macro-enabled-badge',
+																					)}
+																				</Badge>
+																			) : (
+																				<Badge bg="danger">
+																					{t(
+																						'InputMacroAddon:input-macro-macro-disabled-badge',
+																					)}
+																				</Badge>
+																			)}
+																		</td>
+																	</tr>
+																))}
+															</tbody>
+														</Table>
+													</Col>
+												</Row>
+												<hr className="mt-3" />
+												<Row>
+													<Col>
+														<Form.Label>
+															<em>
+																{t('InputMacroAddon:input-macro-sub-header')}
+															</em>
+														</Form.Label>
+													</Col>
+												</Row>
+												<Row>
+													<Col sm={10}>
+														<Form.Check
+															label={t(
+																'InputMacroAddon:input-macro-board-led-enabled',
+															)}
+															type="switch"
+															id="InputMacroAddonBoardLed"
+															isInvalid={false}
+															checked={Boolean(values.macroBoardLedEnabled)}
+															onChange={(e) => {
+																handleCheckbox('macroBoardLedEnabled', values);
+																handleChange(e);
+															}}
+														/>
+													</Col>
+												</Row>
+												<hr className="mt-3" />
+												<Row>
+													<Col sm={10}>
+														<Button type="submit">
+															{t('Common:button-save-label')}
+														</Button>
+														{saveMessage ? (
+															<span className="alert">{saveMessage}</span>
+														) : null}
+													</Col>
+												</Row>
+											</Section>
 										</Tab.Pane>
 										{values.macroList.map((macro, i) => (
-											<Tab.Pane eventKey={`macro-${i}`}>
-											<Section title={`Macro ${i+1}`}>
-												<MacroComponent
+											<Tab.Pane
+												key={`macro-list-tab-pane-${i}`}
+												eventKey={`macro-${i}`}
+											>
+												<Section
+													title={t(
+														'InputMacroAddon:input-macro-macro-list-txt',
+														{ macroNumber: i + 1 },
+													)}
+												>
+													<MacroComponent
 														key={`macroList[${i}]`}
 														id={`macroList[${i}]`}
 														value={values.macroList?.at(i)}
@@ -646,25 +707,31 @@ export default function MacrosPage() {
 														handleChange={handleChange}
 														index={i}
 														setFieldValue={setFieldValue}
+														deleteMacroInput={(i) => {
+															macro.macroInputs.splice(i, 1);
+															setValues(values);
+														}}
 														buttonNames={buttonNames}
 														macroList={values.macroList}
 													/>
 													<hr className="mt-3" />
-													<Button type="submit">{t('Common:button-save-label')}</Button>
+													<Button type="submit">
+														{t('Common:button-save-label')}
+													</Button>
 													{saveMessage ? (
 														<span className="alert">{saveMessage}</span>
 													) : null}
-											</Section>
+												</Section>
 											</Tab.Pane>
 										))}
 									</Tab.Content>
-									</Col></Row>
-							</Tab.Container>
-							<FormContext />
-						</Form>
-					</div>
-				)
-			}
+								</Col>
+							</Row>
+						</Tab.Container>
+						<FormContext />
+					</Form>
+				</div>
+			)}
 		</Formik>
 	);
 }

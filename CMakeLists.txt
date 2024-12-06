@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.13)
 include(CMakePrintHelpers)
 
-
-
+# enable compile commands for use by IDE autocompletion
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # initialize the SDK based on PICO_SDK_PATH
 # note: this must happen before project()
@@ -18,6 +18,10 @@ execute_process(COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 	OUTPUT_VARIABLE GIT_REPO_VERSION
 	OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${GIT_EXECUTABLE} describe --always --abbrev=7
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+	OUTPUT_VARIABLE GIT_REPO_BUILD_ID
+	OUTPUT_STRIP_TRAILING_WHITESPACE)
 string(REGEX REPLACE "v([0-9]+\\.[0-9]+\\.[0-9]+).*" "\\1" CMAKE_GIT_REPO_VERSION ${GIT_REPO_VERSION})
 string(REGEX REPLACE "^(.......-.*)|(.......)$" "0.0.0" CMAKE_GIT_REPO_VERSION ${CMAKE_GIT_REPO_VERSION}) # fix if all we have is the git SHA
 set(GIT_REPO_VERSION v0.7.8)
@@ -26,6 +30,7 @@ set(GP2040_BOARDCONFIG FightingBox-Mini)
 configure_file("headers/version.h.in" "headers/version.h")
 message("GIT_REPO_VERSION is ${GIT_REPO_VERSION}")
 message("CMAKE_GIT_REPO_VERSION is ${CMAKE_GIT_REPO_VERSION}")
+message("GIT_REPO_BUILD_ID is ${GIT_REPO_BUILD_ID}")
 
 # Uncomment the next line for an unomptimized build for debugging. Use in conjunction with the Debug build type.
 # set(PICO_DEOPTIMIZED_DEBUG 1)
@@ -158,6 +163,7 @@ src/drivers/mdmini/MDMiniDriver.cpp
 src/drivers/neogeo/NeoGeoDriver.cpp
 src/drivers/net/NetDriver.cpp
 src/drivers/pcengine/PCEngineDriver.cpp
+src/drivers/ps3/PS3Driver.cpp
 src/drivers/ps4/PS4Auth.cpp
 src/drivers/ps4/PS4AuthUSBListener.cpp
 src/drivers/ps4/PS4Driver.cpp
@@ -175,6 +181,8 @@ src/drivers/xboxog/XboxOriginalDriver.cpp
 src/drivers/xinput/XInputAuth.cpp
 src/drivers/xinput/XInputAuthUSBListener.cpp
 src/drivers/xinput/XInputDriver.cpp
+src/interfaces/i2c/i2cdevicebase.cpp
+src/interfaces/i2c/pcf8575/pcf8575.cpp
 src/interfaces/i2c/ssd1306/obd_ssd1306.cpp
 src/interfaces/i2c/ssd1306/tiny_ssd1306.cpp
 src/display/ui/elements/GPWidget.cpp
@@ -187,6 +195,8 @@ src/display/ui/elements/GPSprite.cpp
 src/display/ui/screens/ButtonLayoutScreen.cpp
 src/display/ui/screens/ConfigScreen.cpp
 src/display/ui/screens/MainMenuScreen.cpp
+src/display/ui/screens/PinViewerScreen.cpp
+src/display/ui/screens/StatsScreen.cpp
 src/display/ui/screens/SplashScreen.cpp
 src/display/GPGFX.cpp
 src/display/GPGFX_UI.cpp
@@ -209,13 +219,15 @@ src/addons/dualdirectional.cpp
 src/addons/keyboard_host.cpp
 src/addons/keyboard_host_listener.cpp
 src/addons/i2canalog1219.cpp
-src/addons/jslider.cpp
+src/addons/i2c_gpio_pcf8575.cpp
 src/addons/display.cpp
 src/addons/neopicoleds.cpp
 src/addons/playernum.cpp
 src/addons/playerleds.cpp
+src/addons/reactiveleds.cpp
 src/addons/rotaryencoder.cpp
 src/addons/reverse.cpp
+src/addons/drv8833_rumble.cpp
 src/addons/turbo.cpp
 src/addons/slider_socd.cpp
 src/addons/wiiext.cpp
@@ -223,6 +235,8 @@ src/addons/input_macro.cpp
 src/addons/snes_input.cpp
 src/addons/tilt.cpp
 src/addons/spi_analog_ads1256.cpp
+src/addons/gamepad_usb_host.cpp
+src/addons/gamepad_usb_host_listener.cpp
 ${PROTO_OUTPUT_DIR}/enums.pb.c
 ${PROTO_OUTPUT_DIR}/config.pb.c
 )
@@ -260,8 +274,12 @@ headers
 headers/addons
 headers/configs
 headers/drivers
+headers/interfaces
 headers/interfaces/i2c
+headers/interfaces/i2c/ads1219
+headers/interfaces/i2c/pcf8575
 headers/interfaces/i2c/ssd1306
+headers/interfaces/i2c/wiiextension
 headers/gamepad
 headers/display
 headers/display/fonts

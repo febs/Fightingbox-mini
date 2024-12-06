@@ -20,7 +20,6 @@
 #include "addons/tilt.h"
 #include "addons/keyboard_host.h"
 #include "addons/i2canalog1219.h"
-#include "addons/jslider.h"
 #include "addons/playernum.h"
 #include "addons/reverse.h"
 #include "addons/turbo.h"
@@ -30,6 +29,9 @@
 #include "addons/input_macro.h"
 #include "addons/snes_input.h"
 #include "addons/rotaryencoder.h"
+#include "addons/i2c_gpio_pcf8575.h"
+#include "addons/gamepad_usb_host.h"
+
 
 // Pico includes
 #include "pico/bootrom.h"
@@ -90,19 +92,20 @@ void GP2040::setup() {
 
 	// Setup Add-ons
 	addons.LoadUSBAddon(new KeyboardHostAddon(), CORE0_INPUT);
+	addons.LoadUSBAddon(new GamepadUSBHostAddon(), CORE0_INPUT);
 	addons.LoadAddon(new AnalogInput(), CORE0_INPUT);
 	addons.LoadAddon(new BootselButtonAddon(), CORE0_INPUT);
 	addons.LoadAddon(new DualDirectionalInput(), CORE0_INPUT);
 	addons.LoadAddon(new FocusModeAddon(), CORE0_INPUT);
 	addons.LoadAddon(new I2CAnalog1219Input(), CORE0_INPUT);
 	addons.LoadAddon(new SPIAnalog1256Input(), CORE0_INPUT);
-	addons.LoadAddon(new JSliderInput(), CORE0_INPUT);
 	addons.LoadAddon(new WiiExtensionInput(), CORE0_INPUT);
 	addons.LoadAddon(new SNESpadInput(), CORE0_INPUT);
 	addons.LoadAddon(new PlayerNumAddon(), CORE0_USBREPORT);
 	addons.LoadAddon(new SliderSOCDInput(), CORE0_INPUT);
 	addons.LoadAddon(new TiltInput(), CORE0_INPUT);
 	addons.LoadAddon(new RotaryEncoderInput(), CORE0_INPUT);
+	addons.LoadAddon(new PCF8575Addon(), CORE0_INPUT);
 
 	// Input override addons
 	addons.LoadAddon(new ReverseInput(), CORE0_INPUT);
@@ -121,14 +124,14 @@ void GP2040::setup() {
 		case BootAction::ENTER_USB_MODE:
 			reset_usb_boot(0, 0);
 			return;
-		case BootAction::SET_INPUT_MODE_HID: // HID drivers
-			inputMode = INPUT_MODE_HID;
-			break;
 		case BootAction::SET_INPUT_MODE_SWITCH:
 			inputMode = INPUT_MODE_SWITCH;
 			break;
 		case BootAction::SET_INPUT_MODE_KEYBOARD:
 			inputMode = INPUT_MODE_KEYBOARD;
+			break;
+		case BootAction::SET_INPUT_MODE_GENERIC:
+			inputMode = INPUT_MODE_GENERIC;
 			break;
 		case BootAction::SET_INPUT_MODE_NEOGEO:
 			inputMode = INPUT_MODE_NEOGEO;
@@ -150,6 +153,9 @@ void GP2040::setup() {
 			break;
 		case BootAction::SET_INPUT_MODE_XINPUT: // X-Input Driver
 			inputMode = INPUT_MODE_XINPUT;
+			break;
+		case BootAction::SET_INPUT_MODE_PS3: // PS3 (HID with quirks) driver
+			inputMode = INPUT_MODE_PS3;
 			break;
 		case BootAction::SET_INPUT_MODE_PS4: // PS4 / PS5 Driver
 			inputMode = INPUT_MODE_PS4;
@@ -174,7 +180,9 @@ void GP2040::setup() {
 	// Save the changed input mode
 	if (inputMode != gamepad->getOptions().inputMode) {	
 		gamepad->setInputMode(inputMode);
-		gamepad->save();
+		// save to match user expectations on choosing mode at boot, and this is
+		// before USB host will be used so we can force it to ignore the check
+		Storage::getInstance().save(true);
 	}
 }
 
@@ -182,12 +190,12 @@ void GP2040::setup() {
  * @brief Initialize standard input button GPIOs that are present in the currently loaded profile.
  */
 void GP2040::initializeStandardGpio() {
-	GpioAction* pinMappings = Storage::getInstance().getProfilePinMappings();
+	GpioMappingInfo* pinMappings = Storage::getInstance().getProfilePinMappings();
 	buttonGpios = 0;
 	for (Pin_t pin = 0; pin < (Pin_t)NUM_BANK0_GPIOS; pin++)
 	{
 		// (NONE=-10, RESERVED=-5, ASSIGNED_TO_ADDON=0, everything else is ours)
-		if (pinMappings[pin] > 0)
+		if (pinMappings[pin].action > 0)
 		{
 			gpio_init(pin);             // Initialize pin
 			gpio_set_dir(pin, GPIO_IN); // Set as INPUT
@@ -201,11 +209,11 @@ void GP2040::initializeStandardGpio() {
  * @brief Deinitialize standard input button GPIOs that are present in the currently loaded profile.
  */
 void GP2040::deinitializeStandardGpio() {
-	GpioAction* pinMappings = Storage::getInstance().getProfilePinMappings();
+	GpioMappingInfo* pinMappings = Storage::getInstance().getProfilePinMappings();
 	for (Pin_t pin = 0; pin < (Pin_t)NUM_BANK0_GPIOS; pin++)
 	{
 		// (NONE=-10, RESERVED=-5, ASSIGNED_TO_ADDON=0, everything else is ours)
-		if (pinMappings[pin] > 0)
+		if (pinMappings[pin].action > 0)
 		{
 			gpio_deinit(pin);
 		}
@@ -255,8 +263,10 @@ void GP2040::run() {
 	Gamepad * gamepad = Storage::getInstance().GetGamepad();
 	Gamepad * processedGamepad = Storage::getInstance().GetProcessedGamepad();
 	bool configMode = Storage::getInstance().GetConfigMode();
-	uint8_t * featureData = Storage::getInstance().GetFeatureData();
-	memset(featureData, 0, 32); // X-Input is the only feature data currently supported
+    
+    // Start the TinyUSB Device functionality
+    tud_init(TUD_OPT_RHPORT);
+    
 	while (1) { // LOOP
 		this->getReinitGamepad(gamepad);
 
@@ -294,7 +304,7 @@ void GP2040::run() {
 		memcpy(&processedGamepad->state, &gamepad->state, sizeof(GamepadState));
 
 		// Process Input Driver
-		inputDriver->process(gamepad, featureData);
+		inputDriver->process(gamepad);
 		
 		// Process USB Report Addons
 		addons.ProcessAddons(ADDON_PROCESS::CORE0_USBREPORT);
@@ -375,10 +385,12 @@ GP2040::BootAction GP2040::getBootAction() {
                                     return BootAction::SET_INPUT_MODE_XINPUT;
                                 case INPUT_MODE_SWITCH: 
                                     return BootAction::SET_INPUT_MODE_SWITCH;
-                                case INPUT_MODE_HID: 
-                                    return BootAction::SET_INPUT_MODE_HID;
                                 case INPUT_MODE_KEYBOARD: 
                                     return BootAction::SET_INPUT_MODE_KEYBOARD;
+                                case INPUT_MODE_GENERIC:
+                                    return BootAction::SET_INPUT_MODE_GENERIC;
+                                case INPUT_MODE_PS3:
+                                    return BootAction::SET_INPUT_MODE_PS3;
                                 case INPUT_MODE_PS4: 
                                     return BootAction::SET_INPUT_MODE_PS4;
                                 case INPUT_MODE_PS5: 
@@ -397,8 +409,8 @@ GP2040::BootAction GP2040::getBootAction() {
                                     return BootAction::SET_INPUT_MODE_PSCLASSIC;
                                 case INPUT_MODE_XBOXORIGINAL: 
                                     return BootAction::SET_INPUT_MODE_XBOXORIGINAL;
-								case INPUT_MODE_XBONE:
-										return BootAction::SET_INPUT_MODE_XBONE;
+                                case INPUT_MODE_XBONE:
+                                    return BootAction::SET_INPUT_MODE_XBONE;
                                 default:
                                     return BootAction::NONE;
                             }

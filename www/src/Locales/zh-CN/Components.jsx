@@ -5,6 +5,8 @@ export default {
 		'pt-BR': 'Português Brasil (巴西葡萄牙语)',
 		'zh-CN': '简体中文',
 		'de-DE': 'Deutsch (德语)',
+		'ja-JP': '日本語 (日语)',
+		'ko-KR': '한국어 (韩语)',
 	},
 	'color-scheme': {
 		dark: '黑暗',

@@ -17,8 +17,8 @@
 
 class GP2040 {
 public:
-	GP2040() {}
-    ~GP2040() {}
+    GP2040(){}
+    ~GP2040(){}
     void setup();           // setup core0
     void run();             // loop core0
 private:
@@ -46,10 +46,11 @@ private:
         NONE,
         ENTER_WEBCONFIG_MODE,
         ENTER_USB_MODE,
-        SET_INPUT_MODE_HID,
         SET_INPUT_MODE_SWITCH,
         SET_INPUT_MODE_XINPUT,
         SET_INPUT_MODE_KEYBOARD,
+        SET_INPUT_MODE_GENERIC,
+        SET_INPUT_MODE_PS3,
         SET_INPUT_MODE_PS4,
         SET_INPUT_MODE_PS5,
         SET_INPUT_MODE_XBONE,

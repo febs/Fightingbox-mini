@@ -10,6 +10,13 @@ void GPGFX_TinySSD1306::init(GPGFX_DisplayTypeOptions options) {
     _options.inverted = options.inverted;
     _options.font = options.font;
 
+    _options.i2c->readRegister(_options.address, 0x00, &this->screenType, 1);
+    this->screenType &= 0x0F;
+
+    if (isSH1106(this->screenType)) {
+        this->screenType = SCREEN_132x64;
+    }
+
 	uint8_t commands[] = {
 		0x00,
 		CommandOps::DISPLAY_OFF,
@@ -59,8 +66,48 @@ void GPGFX_TinySSD1306::init(GPGFX_DisplayTypeOptions options) {
     drawBuffer(NULL);
 }
 
+bool GPGFX_TinySSD1306::isSH1106(int detectedDisplay) {
+
+    this->setPower(false);
+
+    const uint8_t RANDOM_DATA[] = { 0xbf, 0x88, 0x13, 0x41, 0x00 };
+    uint8_t buffer[4];
+    uint8_t i = 0;
+    for (; i < sizeof(RANDOM_DATA); ++i) {
+        buffer[0] = 0x80; // one command
+        buffer[1] = 0xE0; // read-modify-write
+        buffer[2] = 0xC0; // one data
+        if (_options.i2c->write(_options.address, buffer, 3, false) == 0) {
+            break;
+        }
+
+        // Read two bytes back, the first byte is a dummy read and the second byte is the byte was actually want.
+        if (_options.i2c->read(_options.address, buffer, 2, false) == 0) {
+            break;
+        }
+
+        // Check whether the byte we read is the byte we previously wrote.
+        if (i > 0 && buffer[1] != RANDOM_DATA[i - 1]) {
+            break;
+        }
+
+        // Write the current byte, we will attempt to read it in the next loop iteration.
+        buffer[0] = 0xc0; // one data
+        buffer[1] = RANDOM_DATA[i]; // data byte
+        buffer[2] = 0x80; // one command
+        buffer[3] = 0xEE; // end read-modify-write
+        if (_options.i2c->write(_options.address, buffer, 4, false) == 0) {
+            break;
+        }
+    }
+
+    this->setPower(true);
+    return i == sizeof(RANDOM_DATA);
+}
+
 void GPGFX_TinySSD1306::setPower(bool isPowered) {
 	_isPowered = isPowered;
+	sendCommand(_isPowered ? CommandOps::DISPLAY_ON : CommandOps::DISPLAY_OFF);
 }
 
 void GPGFX_TinySSD1306::clear() {
@@ -72,7 +119,13 @@ void GPGFX_TinySSD1306::drawPixel(uint8_t x, uint8_t y, uint32_t color) {
 
 	if ((x<MAX_SCREEN_WIDTH) and (y<MAX_SCREEN_HEIGHT))
 	{
-		row=((y/8)*128)+x;
+        if (this->screenType == ScreenAlternatives::SCREEN_132x64) {
+            x+=2;
+        }
+
+        if (x>=MAX_SCREEN_WIDTH) return;
+
+		row=((y/8)*MAX_SCREEN_WIDTH)+x;
 		bitIndex=y % 8;
 
         if (color == 1) {
@@ -94,7 +147,9 @@ void GPGFX_TinySSD1306::drawText(uint8_t x, uint8_t y, std::string text, uint8_t
 	uint8_t charOffset = 0;
 	const uint8_t* currGlyph;
 
-	for (uint8_t charIndex = 0; charIndex < text.size(); charIndex++) {
+    uint8_t maxTextSize = (MAX_SCREEN_WIDTH / _options.font.width);
+
+	for (uint8_t charIndex = 0; charIndex < MIN(text.size(), maxTextSize); charIndex++) {
 		currChar = text[charIndex];
 		glyphIndex = currChar - GPGFX_FONT_CHAR_OFFSET;
 		currGlyph = &_options.font.fontData[glyphIndex * ((_options.font.width - 1) * (_options.font.height/8))];
@@ -221,17 +276,64 @@ void GPGFX_TinySSD1306::drawEllipse(uint16_t x, uint16_t y, uint32_t radiusX, ui
 	}
 }
 
-void GPGFX_TinySSD1306::drawRectangle(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint32_t color, uint8_t filled) {
-    //printf("Rect %d, %d, %d, %d, %d, %d\n", x, y, width, height, color, filled);
-	drawLine(x, y, x, height, color, filled);
-	drawLine(x, y, width, y, color, filled);
-	drawLine(width, height, x, height, color, filled);
-	drawLine(width, height, width, y, color, filled);
+void GPGFX_TinySSD1306::drawRectangle(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint32_t color, uint8_t filled, double rotationAngle) {
+    // Calculate center point of the rectangle
+    double centerX = (x + width) / 2.0;
+    double centerY = (y + height) / 2.0;
+
+    // Calculate half width and half height for easier calculations
+    double halfWidth = (width - x) / 2.0;
+    double halfHeight = (height - y) / 2.0;
+
+    // Convert rotation angle to radians
+    double angleRad = rotationAngle * M_PI / 180.0;
+
+    // Pre-calculate sine and cosine of the rotation angle
+    double cosA = cos(angleRad);
+    double sinA = sin(angleRad);
+
+    // Calculate rotated coordinates for each corner of the rectangle
+    double x0 = centerX + cosA * (-halfWidth) - sinA * (-halfHeight);
+    double y0 = centerY + sinA * (-halfWidth) + cosA * (-halfHeight);
+
+    double x1 = centerX + cosA * (halfWidth) - sinA * (-halfHeight);
+    double y1 = centerY + sinA * (halfWidth) + cosA * (-halfHeight);
+
+    double x2 = centerX + cosA * (halfWidth) - sinA * (halfHeight);
+    double y2 = centerY + sinA * (halfWidth) + cosA * (halfHeight);
+
+    double x3 = centerX + cosA * (-halfWidth) - sinA * (halfHeight);
+    double y3 = centerY + sinA * (-halfWidth) + cosA * (halfHeight);
+
+    // Round coordinates to nearest integer
+    uint16_t x0_rounded = (uint16_t)round(x0);
+    uint16_t y0_rounded = (uint16_t)round(y0);
+    uint16_t x1_rounded = (uint16_t)round(x1);
+    uint16_t y1_rounded = (uint16_t)round(y1);
+    uint16_t x2_rounded = (uint16_t)round(x2);
+    uint16_t y2_rounded = (uint16_t)round(y2);
+    uint16_t x3_rounded = (uint16_t)round(x3);
+    uint16_t y3_rounded = (uint16_t)round(y3);
+
+    // Draw lines between rotated coordinates
+    drawLine(x0_rounded, y0_rounded, x1_rounded, y1_rounded, color, filled);
+    drawLine(x1_rounded, y1_rounded, x2_rounded, y2_rounded, color, filled);
+    drawLine(x2_rounded, y2_rounded, x3_rounded, y3_rounded, color, filled);
+    drawLine(x3_rounded, y3_rounded, x0_rounded, y0_rounded, color, filled);
 
 	if (filled) {
-		for (uint8_t i = 1; i < (height-y); i++) {
-			drawLine(x, y+i, width, y+i, color, filled);
-		}
+        // Calculate the number of lines needed for the filling
+        uint16_t numLines = (uint16_t)round(sqrt(halfWidth * halfWidth + halfHeight * halfHeight) * 2);
+
+        for (uint16_t i = 0; i <= numLines; i++) {
+            double t = (double)i / numLines;
+            double xStart = (1 - t) * x0 + t * x3;
+            double yStart = (1 - t) * y0 + t * y3;
+            double xEnd = (1 - t) * x1 + t * x2;
+            double yEnd = (1 - t) * y1 + t * y2;
+
+            drawLine((uint16_t)round(xStart), (uint16_t)round(yStart), (uint16_t)round(xEnd), (uint16_t)round(yEnd), color, filled);
+        }
 	}
 }
 
@@ -317,18 +419,37 @@ void GPGFX_TinySSD1306::drawBuffer(uint8_t* pBuffer) {
 
 	int result = -1;
 	
-	sendCommand(CommandOps::PAGE_ADDRESS);
-	sendCommand(0x00);
-	sendCommand(0x07);
-	sendCommand(CommandOps::COLUMN_ADDRESS);
-	sendCommand(0x00);
-	sendCommand(0x7F);
-	if (pBuffer == NULL) {
-		memcpy(&buffer[1],frameBuffer,bufferSize);
-	} else {
-		memcpy(&buffer[1],pBuffer,bufferSize);
-	}
-	result = _options.i2c->write(_options.address, buffer, sizeof(buffer), false);
+    if (this->screenType == ScreenAlternatives::SCREEN_132x64) {
+        uint16_t x = 0;
+        uint16_t y = 0;
+        for (y = 0; y < (MAX_SCREEN_HEIGHT/8); y++) {
+            sendCommand(0xB0 + y);
+            sendCommand(x & 0x0F);
+            sendCommand(0x10 | (x >> 4));
+        
+            if (pBuffer == NULL) {
+                memcpy(&buffer[1],&frameBuffer[y*MAX_SCREEN_WIDTH],MAX_SCREEN_WIDTH);
+            } else {
+                memcpy(&buffer[1],&pBuffer[y*MAX_SCREEN_WIDTH],MAX_SCREEN_WIDTH);
+            }
+        
+            result = _options.i2c->write(_options.address, buffer, MAX_SCREEN_WIDTH+3, false);
+        }
+    } else {
+        sendCommand(CommandOps::PAGE_ADDRESS);
+        sendCommand(0x00);
+        sendCommand(0x07);
+        sendCommand(CommandOps::COLUMN_ADDRESS);
+        sendCommand(0x00);
+        sendCommand(0x7F);
+
+        if (pBuffer == NULL) {
+            memcpy(&buffer[1],frameBuffer,bufferSize);
+        } else {
+            memcpy(&buffer[1],pBuffer,bufferSize);
+        }
+        result = _options.i2c->write(_options.address, buffer, sizeof(buffer), false);
+    }
 
 	if (framePage < MAX_SCREEN_HEIGHT/8) {
 		framePage++;

@@ -19,11 +19,11 @@
 #include "addons/focus_mode.h"
 #include "addons/i2canalog1219.h"
 #include "addons/display.h"
-#include "addons/jslider.h"
 #include "addons/keyboard_host.h"
 #include "addons/neopicoleds.h"
 #include "addons/playernum.h"
 #include "addons/pleds.h"
+#include "addons/reactiveleds.h"
 #include "addons/reverse.h"
 #include "addons/slider_socd.h"
 #include "addons/spi_analog_ads1256.h"
@@ -32,6 +32,9 @@
 #include "addons/snes_input.h"
 #include "addons/input_macro.h"
 #include "addons/rotaryencoder.h"
+#include "addons/i2c_gpio_pcf8575.h"
+#include "addons/drv8833_rumble.h"
+#include "addons/gamepad_usb_host.h"
 
 #include "CRC32.h"
 #include "FlashPROM.h"
@@ -85,7 +88,7 @@
     #define DEFAULT_INPUT_MODE_B2 INPUT_MODE_XINPUT
 #endif
 #ifndef DEFAULT_INPUT_MODE_B3
-    #define DEFAULT_INPUT_MODE_B3 INPUT_MODE_HID
+    #define DEFAULT_INPUT_MODE_B3 INPUT_MODE_PS3
 #endif
 #ifndef DEFAULT_INPUT_MODE_B4
     #define DEFAULT_INPUT_MODE_B4 INPUT_MODE_PS4
@@ -118,6 +121,10 @@
     #define DEFAULT_PS4CONTROLLER_TYPE PS4_CONTROLLER
 #endif
 
+#ifndef DEFAULT_DEBOUNCE_DELAY
+    #define DEFAULT_DEBOUNCE_DELAY 5
+#endif
+
 #ifndef DEFAULT_PS4_REPORTHACK
     #define DEFAULT_PS4_REPORTHACK false
 #endif
@@ -132,6 +139,10 @@
 
 #ifndef DEFAULT_XINPUTAUTHENTICATION_TYPE
     #define DEFAULT_XINPUTAUTHENTICATION_TYPE INPUT_MODE_AUTH_TYPE_NONE
+#endif
+
+#ifndef DEFAULT_PS4_ID_MODE
+    #define DEFAULT_PS4_ID_MODE PS4_ID_CONSOLE
 #endif
 
 #ifndef GPIO_PIN_00
@@ -253,7 +264,7 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.gamepadOptions, fourWayMode, false);
     INIT_UNSET_PROPERTY(config.gamepadOptions, profileNumber, 1);
     INIT_UNSET_PROPERTY(config.gamepadOptions, ps4ControllerType, DEFAULT_PS4CONTROLLER_TYPE);
-    INIT_UNSET_PROPERTY(config.gamepadOptions, debounceDelay, 5);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, debounceDelay, DEFAULT_DEBOUNCE_DELAY);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB1, DEFAULT_INPUT_MODE_B1);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB2, DEFAULT_INPUT_MODE_B2);
     INIT_UNSET_PROPERTY(config.gamepadOptions, inputModeB3, DEFAULT_INPUT_MODE_B3);
@@ -265,6 +276,7 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.gamepadOptions, ps4AuthType, DEFAULT_PS4AUTHENTICATION_TYPE);
     INIT_UNSET_PROPERTY(config.gamepadOptions, ps5AuthType, DEFAULT_PS5AUTHENTICATION_TYPE);
     INIT_UNSET_PROPERTY(config.gamepadOptions, xinputAuthType, DEFAULT_XINPUTAUTHENTICATION_TYPE);
+    INIT_UNSET_PROPERTY(config.gamepadOptions, ps4ControllerIDMode, DEFAULT_PS4_ID_MODE);
 
     // hotkeyOptions
     HotkeyOptions& hotkeyOptions = config.hotkeyOptions;
@@ -358,10 +370,10 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
 
     // displayOptions
     INIT_UNSET_PROPERTY(config.displayOptions, enabled, !!HAS_I2C_DISPLAY);
-    INIT_UNSET_PROPERTY(config.displayOptions, i2cBlock, (DISPLAY_I2C_BLOCK == i2c0) ? 0 : 1);
+    INIT_UNSET_PROPERTY(config.displayOptions, deprecatedI2cBlock, (DISPLAY_I2C_BLOCK == i2c0) ? 0 : 1);
     INIT_UNSET_PROPERTY(config.displayOptions, deprecatedI2cSDAPin, -1);
     INIT_UNSET_PROPERTY(config.displayOptions, deprecatedI2cSCLPin, -1);
-    INIT_UNSET_PROPERTY(config.displayOptions, i2cAddress, DISPLAY_I2C_ADDR);
+    INIT_UNSET_PROPERTY(config.displayOptions, deprecatedI2cAddress, DISPLAY_I2C_ADDR);
     INIT_UNSET_PROPERTY(config.displayOptions, deprecatedI2cSpeed, I2C_SPEED);
     INIT_UNSET_PROPERTY(config.displayOptions, buttonLayout, BUTTON_LAYOUT);
     INIT_UNSET_PROPERTY(config.displayOptions, buttonLayoutRight, BUTTON_LAYOUT_RIGHT);
@@ -451,7 +463,7 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.ledOptions, pledPin2, PLED2_PIN);
     INIT_UNSET_PROPERTY(config.ledOptions, pledPin3, PLED3_PIN);
     INIT_UNSET_PROPERTY(config.ledOptions, pledPin4, PLED4_PIN);
-    INIT_UNSET_PROPERTY(config.ledOptions, pledColor, static_cast<uint32_t>(PLED_COLOR.r) << 16 | static_cast<uint32_t>(PLED_COLOR.g) << 8 | static_cast<uint32_t>(PLED_COLOR.b)); 
+    INIT_UNSET_PROPERTY(config.ledOptions, pledColor, static_cast<uint32_t>(PLED_COLOR.r) << 16 | static_cast<uint32_t>(PLED_COLOR.g) << 8 | static_cast<uint32_t>(PLED_COLOR.b));
     // hacky, but previous versions used PLED1_PIN for either PWM GPIO pins or RGB indexes
     // so we're just going to copy the defined values into both locations and have the migration
     // to pin mappings sort it out
@@ -526,8 +538,12 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, analogAdc2Mode, ANALOG_ADC_2_MODE);
     INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, analogAdc2Invert, ANALOG_ADC_2_INVERT);
     INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, forced_circularity, !!FORCED_CIRCULARITY_ENABLED);
-    INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, analog_deadzone, DEFAULT_ANALOG_DEADZONE);
+    INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, inner_deadzone, DEFAULT_INNER_DEADZONE);
+    INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, outer_deadzone, DEFAULT_OUTER_DEADZONE);
     INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, auto_calibrate, !!AUTO_CALIBRATE_ENABLED);
+    INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, analog_smoothing, !!ANALOG_SMOOTHING_ENABLED);
+    INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, smoothing_factor, !!SMOOTHING_FACTOR);
+    INIT_UNSET_PROPERTY(config.addonOptions.analogOptions, analog_error, ANALOG_ERROR);
 
     // addonOptions.turboOptions
     INIT_UNSET_PROPERTY(config.addonOptions.turboOptions, enabled, !!TURBO_ENABLED);
@@ -550,14 +566,6 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.addonOptions.turboOptions, shmupBtnMask4, SHMUP_BUTTON4);
     INIT_UNSET_PROPERTY(config.addonOptions.turboOptions, shmupMixMode, SHMUP_MIX_MODE);
 
-    // addonOptions.sliderOptions
-    INIT_UNSET_PROPERTY(config.addonOptions.sliderOptions, enabled, !!JSLIDER_ENABLED);
-    INIT_UNSET_PROPERTY(config.addonOptions.sliderOptions, deprecatedPinSliderOne, (Pin_t)-1);
-    INIT_UNSET_PROPERTY(config.addonOptions.sliderOptions, deprecatedPinSliderTwo, (Pin_t)-1);
-    INIT_UNSET_PROPERTY(config.addonOptions.sliderOptions, deprecatedModeOne, SLIDER_MODE_ONE);
-    INIT_UNSET_PROPERTY(config.addonOptions.sliderOptions, deprecatedModeTwo, SLIDER_MODE_TWO);
-    INIT_UNSET_PROPERTY(config.addonOptions.sliderOptions, modeDefault, SLIDER_MODE_ZERO);
-
     // addonOptions.reverseOptions
     INIT_UNSET_PROPERTY(config.addonOptions.reverseOptions, enabled, !!REVERSE_ENABLED);
     INIT_UNSET_PROPERTY(config.addonOptions.reverseOptions, buttonPin, (Pin_t)-1);
@@ -577,10 +585,10 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
 
     // addonOptions.analogADS1219Options
     INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, enabled, !!I2C_ANALOG1219_ENABLED);
-    INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, i2cBlock, (I2C_ANALOG1219_BLOCK == i2c0) ? 0 : 1)
+    INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, deprecatedI2cBlock, (I2C_ANALOG1219_BLOCK == i2c0) ? 0 : 1)
     INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, deprecatedI2cSDAPin, -1);
     INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, deprecatedI2cSCLPin, -1);
-    INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, i2cAddress, I2C_ANALOG1219_ADDRESS);
+    INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, deprecatedI2cAddress, I2C_ANALOG1219_ADDRESS);
     INIT_UNSET_PROPERTY(config.addonOptions.analogADS1219Options, deprecatedI2cSpeed, I2C_ANALOG1219_SPEED);
 
     // addonOptions.analogADS1256Options
@@ -602,24 +610,24 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
 
 	// addonOptions.tiltOptions
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, enabled, !!TILT_ENABLED);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tilt1Pin, PIN_TILT_1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tilt1Pin, (Pin_t)-1);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt1LeftX, TILT1_FACTOR_LEFT_X);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt1LeftY, TILT1_FACTOR_LEFT_Y);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt1RightX, TILT1_FACTOR_RIGHT_X);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt1RightY, TILT1_FACTOR_RIGHT_Y);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tilt2Pin, PIN_TILT_2);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tilt2Pin, (Pin_t)-1);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt2LeftX, TILT2_FACTOR_LEFT_X);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt2LeftY, TILT2_FACTOR_LEFT_Y);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt2RightX, TILT2_FACTOR_RIGHT_X);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, factorTilt2RightY, TILT2_FACTOR_RIGHT_Y);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogDownPin, PIN_TILT_LEFT_ANALOG_DOWN);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogUpPin, PIN_TILT_LEFT_ANALOG_UP);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogLeftPin, PIN_TILT_LEFT_ANALOG_LEFT);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogRightPin, PIN_TILT_LEFT_ANALOG_RIGHT);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogDownPin, PIN_TILT_RIGHT_ANALOG_DOWN);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogUpPin, PIN_TILT_RIGHT_ANALOG_UP);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogLeftPin, PIN_TILT_RIGHT_ANALOG_LEFT);
-    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogRightPin, PIN_TILT_RIGHT_ANALOG_RIGHT);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogDownPin, (Pin_t)-1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogUpPin, (Pin_t)-1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogLeftPin, (Pin_t)-1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltLeftAnalogRightPin, (Pin_t)-1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogDownPin, (Pin_t)-1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogUpPin, (Pin_t)-1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogLeftPin, (Pin_t)-1);
+    INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltRightAnalogRightPin, (Pin_t)-1);
     INIT_UNSET_PROPERTY(config.addonOptions.tiltOptions, tiltSOCDMode, TILT_SOCD_MODE);
 
     // addonOptions.buzzerOptions
@@ -653,7 +661,7 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
 
     // addonOptions.wiiOptions
     INIT_UNSET_PROPERTY(config.addonOptions.wiiOptions, enabled, WII_EXTENSION_ENABLED);
-    INIT_UNSET_PROPERTY(config.addonOptions.wiiOptions, i2cBlock, (WII_EXTENSION_I2C_BLOCK == i2c0) ? 0 : 1);
+    INIT_UNSET_PROPERTY(config.addonOptions.wiiOptions, deprecatedI2cBlock, (WII_EXTENSION_I2C_BLOCK == i2c0) ? 0 : 1);
     INIT_UNSET_PROPERTY(config.addonOptions.wiiOptions, deprecatedI2cSDAPin, -1);
     INIT_UNSET_PROPERTY(config.addonOptions.wiiOptions, deprecatedI2cSCLPin, -1);
     INIT_UNSET_PROPERTY(config.addonOptions.wiiOptions, deprecatedI2cSpeed, WII_EXTENSION_I2C_SPEED);
@@ -663,6 +671,40 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.addonOptions.snesOptions, clockPin, SNES_PAD_CLOCK_PIN);
     INIT_UNSET_PROPERTY(config.addonOptions.snesOptions, latchPin, SNES_PAD_LATCH_PIN);
     INIT_UNSET_PROPERTY(config.addonOptions.snesOptions, dataPin, SNES_PAD_DATA_PIN);
+
+    // addonOptions.pcf8575Options
+    INIT_UNSET_PROPERTY(config.addonOptions.pcf8575Options, enabled, I2C_PCF8575_ENABLED);
+    INIT_UNSET_PROPERTY(config.addonOptions.pcf8575Options, deprecatedI2cBlock, (I2C_PCF8575_BLOCK == i2c0) ? 0 : 1);
+
+    GpioAction pcf8575Actions[PCF8575_PIN_COUNT] = {
+        PCF8575_PIN00_ACTION,PCF8575_PIN01_ACTION,PCF8575_PIN02_ACTION,PCF8575_PIN03_ACTION,
+        PCF8575_PIN04_ACTION,PCF8575_PIN05_ACTION,PCF8575_PIN06_ACTION,PCF8575_PIN07_ACTION,
+        PCF8575_PIN08_ACTION,PCF8575_PIN09_ACTION,PCF8575_PIN10_ACTION,PCF8575_PIN11_ACTION,
+        PCF8575_PIN12_ACTION,PCF8575_PIN13_ACTION,PCF8575_PIN14_ACTION,PCF8575_PIN15_ACTION
+    };
+
+    GpioDirection pcf8575Directions[PCF8575_PIN_COUNT] = {
+        PCF8575_PIN00_DIRECTION,PCF8575_PIN01_DIRECTION,PCF8575_PIN02_DIRECTION,PCF8575_PIN03_DIRECTION,
+        PCF8575_PIN04_DIRECTION,PCF8575_PIN05_DIRECTION,PCF8575_PIN06_DIRECTION,PCF8575_PIN07_DIRECTION,
+        PCF8575_PIN08_DIRECTION,PCF8575_PIN09_DIRECTION,PCF8575_PIN10_DIRECTION,PCF8575_PIN11_DIRECTION,
+        PCF8575_PIN12_DIRECTION,PCF8575_PIN13_DIRECTION,PCF8575_PIN14_DIRECTION,PCF8575_PIN15_DIRECTION
+    };
+
+    for (uint16_t pin = 0; pin < PCF8575_PIN_COUNT; pin++) {
+        INIT_UNSET_PROPERTY(config.addonOptions.pcf8575Options.pins[pin], action, pcf8575Actions[pin]);
+        INIT_UNSET_PROPERTY(config.addonOptions.pcf8575Options.pins[pin], direction, pcf8575Directions[pin]);
+    }
+    // reminder that this must be set or else nanopb won't retain anything
+    config.addonOptions.pcf8575Options.pins_count = PCF8575_PIN_COUNT;
+
+    // addonOptions.drv8833RumbleOptions
+    INIT_UNSET_PROPERTY(config.addonOptions.drv8833RumbleOptions, enabled, !!DRV8833_RUMBLE_ENABLED);
+    INIT_UNSET_PROPERTY(config.addonOptions.drv8833RumbleOptions, leftMotorPin, DRV8833_RUMBLE_LEFT_MOTOR_PIN);
+    INIT_UNSET_PROPERTY(config.addonOptions.drv8833RumbleOptions, rightMotorPin, DRV8833_RUMBLE_RIGHT_MOTOR_PIN);
+    INIT_UNSET_PROPERTY(config.addonOptions.drv8833RumbleOptions, motorSleepPin, DRV8833_RUMBLE_MOTOR_SLEEP_PIN);
+    INIT_UNSET_PROPERTY(config.addonOptions.drv8833RumbleOptions, pwmFrequency, DRV8833_RUMBLE_PWM_FREQUENCY);
+    INIT_UNSET_PROPERTY(config.addonOptions.drv8833RumbleOptions, dutyMin, DRV8833_RUMBLE_DUTY_MIN);
+    INIT_UNSET_PROPERTY(config.addonOptions.drv8833RumbleOptions, dutyMax, DRV8833_RUMBLE_DUTY_MAX);
 
     // addonOptions.rotaryOptions
     INIT_UNSET_PROPERTY(config.addonOptions.rotaryOptions, enabled, !!ROTARY_ENCODER_ENABLED);
@@ -682,6 +724,17 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.addonOptions.rotaryOptions.encoderTwo, resetAfter, ENCODER_TWO_RESET);
     INIT_UNSET_PROPERTY(config.addonOptions.rotaryOptions.encoderTwo, allowWrapAround, ENCODER_TWO_WRAP);
     INIT_UNSET_PROPERTY(config.addonOptions.rotaryOptions.encoderTwo, multiplier, ENCODER_TWO_MULTIPLIER);
+
+    // addonOptions.reactiveLEDOptions
+    INIT_UNSET_PROPERTY(config.addonOptions.reactiveLEDOptions, enabled, !!REACTIVE_LED_ENABLED);
+    for (uint16_t led = 0; led < REACTIVE_LED_COUNT; led++) {
+        INIT_UNSET_PROPERTY(config.addonOptions.reactiveLEDOptions.leds[led], pin, -1);
+        INIT_UNSET_PROPERTY(config.addonOptions.reactiveLEDOptions.leds[led], action, GpioAction::NONE);
+        INIT_UNSET_PROPERTY(config.addonOptions.reactiveLEDOptions.leds[led], modeDown, REACTIVE_LED_STATIC_ON);
+        INIT_UNSET_PROPERTY(config.addonOptions.reactiveLEDOptions.leds[led], modeUp, REACTIVE_LED_STATIC_OFF);
+    }
+    // reminder that this must be set or else nanopb won't retain anything
+    config.addonOptions.reactiveLEDOptions.leds_count = REACTIVE_LED_COUNT;
 
     // keyboardMapping
     INIT_UNSET_PROPERTY(config.addonOptions.keyboardHostOptions, enabled, KEYBOARD_HOST_ENABLED);
@@ -708,10 +761,14 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
 
     // addonOptions.focusModeOptions
     INIT_UNSET_PROPERTY(config.addonOptions.focusModeOptions, enabled, !!FOCUS_MODE_ENABLED);
-    INIT_UNSET_PROPERTY(config.addonOptions.focusModeOptions, pin, FOCUS_MODE_PIN);
+    INIT_UNSET_PROPERTY(config.addonOptions.focusModeOptions, pin, -1);
     INIT_UNSET_PROPERTY(config.addonOptions.focusModeOptions, buttonLockMask, FOCUS_MODE_BUTTON_MASK);
     INIT_UNSET_PROPERTY(config.addonOptions.focusModeOptions, buttonLockEnabled, !!FOCUS_MODE_BUTTON_LOCK_ENABLED);
     INIT_UNSET_PROPERTY(config.addonOptions.focusModeOptions, macroLockEnabled, !!FOCUS_MODE_MACRO_LOCK_ENABLED);
+
+
+    // addonOptions.gamepadUSBHostOptions
+    INIT_UNSET_PROPERTY(config.addonOptions.gamepadUSBHostOptions, enabled, GAMEPAD_USB_HOST_ENABLED)
 
     // Macro options (always on)
     INIT_UNSET_PROPERTY(config.addonOptions.macroOptions, enabled, true);
@@ -748,13 +805,15 @@ void gpioMappingsMigrationCore(Config& config)
     PinMappings& deprecatedPinMappings = config.deprecatedPinMappings;
     ExtraButtonOptions& extraButtonOptions = config.addonOptions.deprecatedExtraButtonOptions;
     DualDirectionalOptions& ddiOptions = config.addonOptions.dualDirectionalOptions;
-    SliderOptions& jsSliderOptions = config.addonOptions.sliderOptions;
+    SliderOptions& jsSliderOptions = config.addonOptions.deprecatedSliderOptions;
     SOCDSliderOptions& socdSliderOptions = config.addonOptions.socdSliderOptions;
     PeripheralOptions& peripheralOptions = config.peripheralOptions;
-    TiltOptions& tiltOptions = config.addonOptions.tiltOptions;
     KeyboardHostOptions& keyboardHostOptions = config.addonOptions.keyboardHostOptions;
     PSPassthroughOptions& psPassthroughOptions = config.addonOptions.psPassthroughOptions;
     TurboOptions& turboOptions = config.addonOptions.turboOptions;
+    TiltOptions& tiltOptions = config.addonOptions.tiltOptions;
+    FocusModeOptions& focusModeOptions = config.addonOptions.focusModeOptions;
+    ReverseOptions& reverseOptions = config.addonOptions.reverseOptions;
 
     const auto gamepadMaskToGpioAction = [&](Mask_t gpMask) -> GpioAction
     {
@@ -950,6 +1009,14 @@ void gpioMappingsMigrationCore(Config& config)
         socdSliderOptions.deprecatedPinTwo = -1;
     }
 
+    if (focusModeOptions.enabled) {
+        fromProtoBuf(focusModeOptions.has_pin, &focusModeOptions.pin, GpioAction::SUSTAIN_FOCUS_MODE);
+    }
+
+    if (reverseOptions.enabled) {
+        fromProtoBuf(reverseOptions.has_buttonPin, &reverseOptions.buttonPin, GpioAction::BUTTON_PRESS_INPUT_REVERSE);
+    }
+
     // verify that tilt factors are not set to -1
     if (tiltOptions.enabled) {
         if (tiltOptions.factorTilt1LeftX == -1) tiltOptions.factorTilt1LeftX = TILT1_FACTOR_LEFT_X;
@@ -960,6 +1027,17 @@ void gpioMappingsMigrationCore(Config& config)
         if (tiltOptions.factorTilt2LeftY == -1) tiltOptions.factorTilt2LeftY = TILT2_FACTOR_LEFT_Y;
         if (tiltOptions.factorTilt2RightX == -1) tiltOptions.factorTilt2RightX = TILT2_FACTOR_RIGHT_X;
         if (tiltOptions.factorTilt2RightY == -1) tiltOptions.factorTilt2RightY = TILT2_FACTOR_RIGHT_Y;
+
+        fromProtoBuf(tiltOptions.has_tilt1Pin, &tiltOptions.tilt1Pin, GpioAction::ANALOG_DIRECTION_MOD_LOW);
+        fromProtoBuf(tiltOptions.has_tilt2Pin, &tiltOptions.tilt2Pin, GpioAction::ANALOG_DIRECTION_MOD_HIGH);
+        fromProtoBuf(tiltOptions.has_tiltLeftAnalogUpPin, &tiltOptions.tiltLeftAnalogUpPin, GpioAction::ANALOG_DIRECTION_LS_Y_NEG);
+        fromProtoBuf(tiltOptions.has_tiltLeftAnalogDownPin, &tiltOptions.tiltLeftAnalogDownPin, GpioAction::ANALOG_DIRECTION_LS_Y_POS);
+        fromProtoBuf(tiltOptions.has_tiltLeftAnalogLeftPin, &tiltOptions.tiltLeftAnalogLeftPin, GpioAction::ANALOG_DIRECTION_LS_X_NEG);
+        fromProtoBuf(tiltOptions.has_tiltLeftAnalogRightPin, &tiltOptions.tiltLeftAnalogRightPin, GpioAction::ANALOG_DIRECTION_LS_X_POS);
+        fromProtoBuf(tiltOptions.has_tiltRightAnalogUpPin, &tiltOptions.tiltRightAnalogUpPin, GpioAction::ANALOG_DIRECTION_RS_Y_NEG);
+        fromProtoBuf(tiltOptions.has_tiltRightAnalogDownPin, &tiltOptions.tiltRightAnalogDownPin, GpioAction::ANALOG_DIRECTION_RS_Y_POS);
+        fromProtoBuf(tiltOptions.has_tiltRightAnalogLeftPin, &tiltOptions.tiltRightAnalogLeftPin, GpioAction::ANALOG_DIRECTION_RS_X_NEG);
+        fromProtoBuf(tiltOptions.has_tiltRightAnalogRightPin, &tiltOptions.tiltRightAnalogRightPin, GpioAction::ANALOG_DIRECTION_RS_X_POS);
     }
 
     // Assign all potential board config pins
@@ -973,7 +1051,7 @@ void gpioMappingsMigrationCore(Config& config)
                                                GPIO_PIN_21, GPIO_PIN_22, GPIO_PIN_23,
                                                GPIO_PIN_24, GPIO_PIN_25, GPIO_PIN_26,
                                                GPIO_PIN_27, GPIO_PIN_28, GPIO_PIN_29};
-    
+
     // If we didn't import from protobuf, import from boardconfig
     for(unsigned int i = 0; i < NUM_BANK0_GPIOS; i++) {
         fromBoardConfig(i, boardConfig[i]);
@@ -981,27 +1059,27 @@ void gpioMappingsMigrationCore(Config& config)
 
     // migrate I2C addons to use peripheral manager
     if (!peripheralOptions.blockI2C0.enabled && (
-            (config.displayOptions.enabled && (config.displayOptions.i2cBlock == 0)) || 
-            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.i2cBlock == 0)) || 
-            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.i2cBlock == 0))
+            (config.displayOptions.enabled && (config.displayOptions.deprecatedI2cBlock == 0)) || 
+            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 0)) || 
+            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 0))
         )
     ) {
         peripheralOptions.blockI2C0.enabled = (
-            (config.displayOptions.enabled && (config.displayOptions.i2cBlock == 0)) | 
-            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.i2cBlock == 0)) | 
-            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.i2cBlock == 0)) | 
+            (config.displayOptions.enabled && (config.displayOptions.deprecatedI2cBlock == 0)) | 
+            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 0)) | 
+            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 0)) | 
             (!!I2C0_ENABLED)
         );
-        
+
         // pin configuration
         peripheralOptions.blockI2C0.sda = (
-            isValidPin(config.displayOptions.deprecatedI2cSDAPin) && (config.displayOptions.i2cBlock == 0) ? 
+            isValidPin(config.displayOptions.deprecatedI2cSDAPin) && (config.displayOptions.deprecatedI2cBlock == 0) ? 
             config.displayOptions.deprecatedI2cSDAPin : 
             (
-                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSDAPin) && (config.addonOptions.analogADS1219Options.i2cBlock == 0) ? 
+                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSDAPin) && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 0) ? 
                 config.addonOptions.analogADS1219Options.deprecatedI2cSDAPin : 
                 (
-                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSDAPin) && (config.addonOptions.wiiOptions.i2cBlock == 0) ? 
+                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSDAPin) && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 0) ? 
                     config.addonOptions.wiiOptions.deprecatedI2cSDAPin : 
                     I2C0_PIN_SDA
                 )
@@ -1010,13 +1088,13 @@ void gpioMappingsMigrationCore(Config& config)
         markAddonPinIfUsed(peripheralOptions.blockI2C0.sda);
 
         peripheralOptions.blockI2C0.scl = (
-            isValidPin(config.displayOptions.deprecatedI2cSCLPin) && (config.displayOptions.i2cBlock == 0) ? 
+            isValidPin(config.displayOptions.deprecatedI2cSCLPin) && (config.displayOptions.deprecatedI2cBlock == 0) ? 
             config.displayOptions.deprecatedI2cSCLPin : 
             (
-                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSCLPin) && (config.addonOptions.analogADS1219Options.i2cBlock == 0) ? 
+                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSCLPin) && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 0) ? 
                 config.addonOptions.analogADS1219Options.deprecatedI2cSCLPin : 
                 (
-                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSCLPin) && (config.addonOptions.wiiOptions.i2cBlock == 0) ? 
+                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSCLPin) && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 0) ? 
                     config.addonOptions.wiiOptions.deprecatedI2cSCLPin : 
                     I2C0_PIN_SCL
                 )
@@ -1026,13 +1104,13 @@ void gpioMappingsMigrationCore(Config& config)
 
         // option configuration
         peripheralOptions.blockI2C0.speed = (
-            isValidPin(config.displayOptions.deprecatedI2cSpeed) && (config.displayOptions.i2cBlock == 0) ? 
+            isValidPin(config.displayOptions.deprecatedI2cSpeed) && (config.displayOptions.deprecatedI2cBlock == 0) ? 
             config.displayOptions.deprecatedI2cSpeed : 
             (
-                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSpeed) && (config.addonOptions.analogADS1219Options.i2cBlock == 0) ? 
+                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSpeed) && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 0) ? 
                 config.addonOptions.analogADS1219Options.deprecatedI2cSpeed : 
                 (
-                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSpeed) && (config.addonOptions.wiiOptions.i2cBlock == 0) ? 
+                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSpeed) && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 0) ? 
                     config.addonOptions.wiiOptions.deprecatedI2cSpeed : 
                     I2C0_SPEED
                 )
@@ -1041,27 +1119,27 @@ void gpioMappingsMigrationCore(Config& config)
     }
 
     if (!peripheralOptions.blockI2C1.enabled && (
-            (config.displayOptions.enabled && (config.displayOptions.i2cBlock == 1)) || 
-            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.i2cBlock == 1)) || 
-            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.i2cBlock == 1))
+            (config.displayOptions.enabled && (config.displayOptions.deprecatedI2cBlock == 1)) || 
+            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 1)) || 
+            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 1))
         )
     ) {
         peripheralOptions.blockI2C1.enabled = (
-            (config.displayOptions.enabled && (config.displayOptions.i2cBlock == 1)) | 
-            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.i2cBlock == 1)) | 
-            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.i2cBlock == 1)) | 
+            (config.displayOptions.enabled && (config.displayOptions.deprecatedI2cBlock == 1)) | 
+            (config.addonOptions.analogADS1219Options.enabled && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 1)) | 
+            (config.addonOptions.wiiOptions.enabled && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 1)) | 
             (!!I2C1_ENABLED)
         );
-        
+
         // pin configuration
         peripheralOptions.blockI2C1.sda = (
-            isValidPin(config.displayOptions.deprecatedI2cSDAPin) && (config.displayOptions.i2cBlock == 1) ? 
+            isValidPin(config.displayOptions.deprecatedI2cSDAPin) && (config.displayOptions.deprecatedI2cBlock == 1) ? 
             config.displayOptions.deprecatedI2cSDAPin : 
             (
-                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSDAPin) && (config.addonOptions.analogADS1219Options.i2cBlock == 1) ? 
+                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSDAPin) && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 1) ? 
                 config.addonOptions.analogADS1219Options.deprecatedI2cSDAPin : 
                 (
-                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSDAPin) && (config.addonOptions.wiiOptions.i2cBlock == 1) ? 
+                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSDAPin) && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 1) ? 
                     config.addonOptions.wiiOptions.deprecatedI2cSDAPin : 
                     I2C1_PIN_SDA
                 )
@@ -1070,13 +1148,13 @@ void gpioMappingsMigrationCore(Config& config)
         markAddonPinIfUsed(peripheralOptions.blockI2C1.sda);
 
         peripheralOptions.blockI2C1.scl = (
-            isValidPin(config.displayOptions.deprecatedI2cSCLPin) && (config.displayOptions.i2cBlock == 1) ? 
+            isValidPin(config.displayOptions.deprecatedI2cSCLPin) && (config.displayOptions.deprecatedI2cBlock == 1) ? 
             config.displayOptions.deprecatedI2cSCLPin : 
             (
-                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSCLPin) && (config.addonOptions.analogADS1219Options.i2cBlock == 1) ? 
+                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSCLPin) && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 1) ? 
                 config.addonOptions.analogADS1219Options.deprecatedI2cSCLPin : 
                 (
-                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSCLPin) && (config.addonOptions.wiiOptions.i2cBlock == 1) ? 
+                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSCLPin) && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 1) ? 
                     config.addonOptions.wiiOptions.deprecatedI2cSCLPin : 
                     I2C1_PIN_SCL
                 )
@@ -1086,13 +1164,13 @@ void gpioMappingsMigrationCore(Config& config)
 
         // option configuration
         peripheralOptions.blockI2C1.speed = (
-            isValidPin(config.displayOptions.deprecatedI2cSpeed) && (config.displayOptions.i2cBlock == 1) ? 
+            isValidPin(config.displayOptions.deprecatedI2cSpeed) && (config.displayOptions.deprecatedI2cBlock == 1) ? 
             config.displayOptions.deprecatedI2cSpeed : 
             (
-                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSpeed) && (config.addonOptions.analogADS1219Options.i2cBlock == 1) ? 
+                isValidPin(config.addonOptions.analogADS1219Options.deprecatedI2cSpeed) && (config.addonOptions.analogADS1219Options.deprecatedI2cBlock == 1) ? 
                 config.addonOptions.analogADS1219Options.deprecatedI2cSpeed : 
                 (
-                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSpeed) && (config.addonOptions.wiiOptions.i2cBlock == 1) ? 
+                    isValidPin(config.addonOptions.wiiOptions.deprecatedI2cSpeed) && (config.addonOptions.wiiOptions.deprecatedI2cBlock == 1) ? 
                     config.addonOptions.wiiOptions.deprecatedI2cSpeed : 
                     I2C1_SPEED
                 )
@@ -1106,22 +1184,22 @@ void gpioMappingsMigrationCore(Config& config)
 
         if (peripheralOptions.blockUSB0.enabled) {
             peripheralOptions.blockUSB0.enable5v = (
-                isValidPin(keyboardHostOptions.deprecatedPin5V) ? 
-                keyboardHostOptions.deprecatedPin5V : 
+                isValidPin(keyboardHostOptions.deprecatedPin5V) ?
+                keyboardHostOptions.deprecatedPin5V :
                 (
-                    isValidPin(psPassthroughOptions.deprecatedPin5V) ? 
-                    psPassthroughOptions.deprecatedPin5V : 
+                    isValidPin(psPassthroughOptions.deprecatedPin5V) ?
+                    psPassthroughOptions.deprecatedPin5V :
                     -1
                 )
             );
             markAddonPinIfUsed(peripheralOptions.blockUSB0.enable5v);
 
             peripheralOptions.blockUSB0.dp = (
-                isValidPin(keyboardHostOptions.deprecatedPinDplus) ? 
-                keyboardHostOptions.deprecatedPinDplus : 
+                isValidPin(keyboardHostOptions.deprecatedPinDplus) ?
+                keyboardHostOptions.deprecatedPinDplus :
                 (
-                    isValidPin(psPassthroughOptions.deprecatedPinDplus) ? 
-                    psPassthroughOptions.deprecatedPinDplus : 
+                    isValidPin(psPassthroughOptions.deprecatedPinDplus) ?
+                    psPassthroughOptions.deprecatedPinDplus :
                     -1
                 )
             );
@@ -1154,25 +1232,13 @@ void gpioMappingsMigrationCore(Config& config)
     markAddonPinIfUsed(config.addonOptions.analogOptions.analogAdc2PinY);
     markAddonPinIfUsed(config.addonOptions.buzzerOptions.pin);
     markAddonPinIfUsed(config.addonOptions.buzzerOptions.enablePin);
-    markAddonPinIfUsed(config.addonOptions.focusModeOptions.pin);
     markAddonPinIfUsed(config.addonOptions.turboOptions.ledPin);
     markAddonPinIfUsed(config.addonOptions.turboOptions.shmupDialPin);
     markAddonPinIfUsed(config.addonOptions.turboOptions.shmupBtn1Pin);
     markAddonPinIfUsed(config.addonOptions.turboOptions.shmupBtn2Pin);
     markAddonPinIfUsed(config.addonOptions.turboOptions.shmupBtn3Pin);
     markAddonPinIfUsed(config.addonOptions.turboOptions.shmupBtn4Pin);
-    markAddonPinIfUsed(config.addonOptions.reverseOptions.buttonPin);
     markAddonPinIfUsed(config.addonOptions.reverseOptions.ledPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tilt1Pin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tilt2Pin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltLeftAnalogUpPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltLeftAnalogDownPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltLeftAnalogLeftPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltLeftAnalogRightPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltRightAnalogUpPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltRightAnalogDownPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltRightAnalogLeftPin);
-    markAddonPinIfUsed(config.addonOptions.tiltOptions.tiltRightAnalogRightPin);
     markAddonPinIfUsed(config.addonOptions.snesOptions.clockPin);
     markAddonPinIfUsed(config.addonOptions.snesOptions.latchPin);
     markAddonPinIfUsed(config.addonOptions.snesOptions.dataPin);
@@ -1184,6 +1250,16 @@ void gpioMappingsMigrationCore(Config& config)
     config.gpioMappings.pins_count = NUM_BANK0_GPIOS;
 
     config.migrations.gpioMappingsMigrated = true;
+}
+
+// if the user previously had the JS slider addon enabled, copy its default to the
+// core gamepad setting, since the functionality is within the core now
+void migrateJSliderToCore(Config& config)
+{
+    if (config.addonOptions.deprecatedSliderOptions.enabled) {
+        config.gamepadOptions.dpadMode = config.addonOptions.deprecatedSliderOptions.deprecatedModeDefault;
+        config.addonOptions.deprecatedSliderOptions.enabled = false;
+    }
 }
 
 // populate the alternative gpio mapping sets, aka profiles, with
@@ -1257,7 +1333,7 @@ void migrateAuthenticationMethods(Config& config) {
         gamepadOptions.ps4AuthType = InputModeAuthType::INPUT_MODE_AUTH_TYPE_KEYS;
         ps4Options.enabled = false; // disable PS4-Mode add-on permanently
     }
-    
+
     if ( psPassthroughOptions.enabled == true ) { // PS5 add-on "on", USB pass through, update ps4->ps5 boot
         gamepadOptions.ps5AuthType = InputModeAuthType::INPUT_MODE_AUTH_TYPE_USB;
         // If current mode is PS4, update to PS5
@@ -1282,6 +1358,34 @@ void migrateAuthenticationMethods(Config& config) {
     }
 }
 
+// enable profiles that have real data in them (profile 1 is always enabled)
+// note that profiles 2-4 are no longer populated with profile 1's data on a fresh
+// config, and this is checking previous configs with non-copy mappings to enable them
+void profileEnabledFlagsMigration(Config& config) {
+    config.gpioMappings.enabled = true;
+    for (uint8_t profileNum = 0; profileNum < config.profileOptions.gpioMappingsSets_count; profileNum++) {
+        if (!config.profileOptions.gpioMappingsSets[profileNum].pins_count) {
+            // uninitialized profile, skip it and leave it disabled
+            config.profileOptions.gpioMappingsSets[profileNum].enabled = false;
+            continue;
+        }
+        for (uint8_t pinNum = 0; pinNum < config.gpioMappings.pins_count; pinNum++) {
+            // check each pin: if the alt. mapping pin is different than the base (profile 1)
+            // mapping, enable the profile and check the next one
+            if (config.gpioMappings.pins[pinNum].action !=
+                        config.profileOptions.gpioMappingsSets[profileNum].pins[pinNum].action ||
+                    config.gpioMappings.pins[pinNum].customButtonMask !=
+                        config.profileOptions.gpioMappingsSets[profileNum].pins[pinNum].customButtonMask ||
+                    config.gpioMappings.pins[pinNum].customDpadMask !=
+                        config.profileOptions.gpioMappingsSets[profileNum].pins[pinNum].customDpadMask) {
+                config.profileOptions.gpioMappingsSets[profileNum].enabled = true;
+                break;
+            }
+        }
+    }
+    config.migrations.profileEnabledFlagsMigrated = true;
+}
+
 void migrateMacroPinsToGpio(Config& config) {
     // Convert Macro pin mapping to GPIO mapping configs
     MacroOptions & macroOptions = config.addonOptions.macroOptions;
@@ -1294,7 +1398,7 @@ void migrateMacroPinsToGpio(Config& config) {
         macroOptions.deprecatedPin = -1; // set our turbo options to -1 for subsequent calls
         macroOptions.has_deprecatedPin = false;
     }
-    
+
     if ( macroOptions.macroList_count == MAX_MACRO_LIMIT ) {
         const static GpioAction actionList[6] = { GpioAction::BUTTON_PRESS_MACRO_1, GpioAction::BUTTON_PRESS_MACRO_2,
                                                     GpioAction::BUTTON_PRESS_MACRO_3, GpioAction::BUTTON_PRESS_MACRO_4,
@@ -1460,9 +1564,9 @@ void ConfigUtils::load(Config& config)
     if (!config.migrations.gpioMappingsMigrated)
         gpioMappingsMigrationCore(config);
 
-    // Run button profile migrations
-    if (!config.migrations.buttonProfilesMigrated)
-        gpioMappingsMigrationProfiles(config);
+    // Run migration to enable or disable pre-existing profiles
+    if (!config.migrations.profileEnabledFlagsMigrated)
+        profileEnabledFlagsMigration(config);
 
     // following migrations are simple enough to not need a protobuf boolean to track
     // Migrate turbo into GpioMappings
@@ -1471,6 +1575,8 @@ void ConfigUtils::load(Config& config)
     migrateAuthenticationMethods(config);
     // Macro pins to gpio
     migrateMacroPinsToGpio(config);
+    // Migrate old JS slider add-on to core
+    migrateJSliderToCore(config);
 
     // Update boardVersion, in case we migrated from an older version
     strncpy(config.boardVersion, GP2040VERSION, sizeof(config.boardVersion));
@@ -1488,7 +1594,7 @@ static void setHasFlags(const pb_msgdesc_t* fields, void* s)
     {
         return;
     }
-    
+
     do
     {
         // Not implemented for extension fields
@@ -1711,7 +1817,7 @@ std::string ConfigUtils::toJSON(const Config& config)
 // From JSON
 // -----------------------------------------------------
 
-#define TEST_VALUE(name, value) if (v == value) return true; 
+#define TEST_VALUE(name, value) if (v == value) return true;
 
 #define GEN_IS_VALID_ENUM_VALUE_FUNCTION(enumtype) \
     static bool isValid ## enumtype(int v) \
@@ -2102,7 +2208,6 @@ bool ConfigUtils::fromJSON(Config& config, const char* data, size_t dataLen)
 
     // we need to run migrations here too, in case the json document changed pins or things derived from pins
     gpioMappingsMigrationCore(config);
-    gpioMappingsMigrationProfiles(config);
     migrateTurboPinToGpio(config);
     migrateAuthenticationMethods(config);
     migrateMacroPinsToGpio(config);

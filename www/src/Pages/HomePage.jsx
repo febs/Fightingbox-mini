@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { AppContext } from '../Contexts/AppContext';
-import axios from 'axios';
+import Http from '../Services/Http';
 import { useTranslation } from 'react-i18next';
 
 import Section from '../Components/Section';
@@ -30,10 +30,9 @@ export default function HomePage() {
 						label: boardConfigLabel,
 						fileName: boardConfigFileName,
 					});
-					axios
-						.get(
-							'https://api.github.com/repos/OpenStickCommunity/GP2040-CE/releases/latest',
-						)
+					Http.get(
+						'https://api.github.com/repos/OpenStickCommunity/GP2040-CE/releases/latest',
+					)
 						.then((response) => {
 							const latestTag = response.data.tag_name;
 							setLatestVersion(latestTag);
@@ -56,11 +55,18 @@ export default function HomePage() {
 
 		WebApi.getMemoryReport(setLoading)
 			.then((response) => {
-				const { totalFlash, usedFlash, staticAllocs, totalHeap, usedHeap } =
-					response;
+				const {
+					totalFlash,
+					usedFlash,
+					physicalFlash,
+					staticAllocs,
+					totalHeap,
+					usedHeap,
+				} = response;
 				setMemoryReport({
 					totalFlash: toKB(totalFlash),
 					usedFlash: toKB(usedFlash),
+					physicalFlash: toKB(physicalFlash),
 					staticAllocs: toKB(staticAllocs),
 					totalHeap: toKB(totalHeap),
 					usedHeap: toKB(usedHeap),
@@ -83,18 +89,20 @@ export default function HomePage() {
 					<div>{`${boardConfigProperties.label} (${boardConfigProperties.fileName}.uf2)`}</div>
 					<div>{t('HomePage:current-text', { version: currentVersion })}</div>
 					<div>{t('HomePage:latest-text', { version: latestVersion })}</div>
-					{latestVersion && currentVersion?.split("-").length == 1 && currentVersion !== latestVersion && (
-						<div className="mt-3 mb-3">
-							<a
-								target="_blank"
-								rel="noreferrer"
-								href={latestDownloadUrl}
-								className="btn btn-primary"
-							>
-								{t('HomePage:get-update-text')}
-							</a>
-						</div>
-					)}
+					{latestVersion &&
+						currentVersion?.split('-').length == 1 &&
+						currentVersion !== latestVersion && (
+							<div className="mt-3 mb-3">
+								<a
+									target="_blank"
+									rel="noreferrer"
+									href={latestDownloadUrl}
+									className="btn btn-primary"
+								>
+									{t('HomePage:get-update-text')}
+								</a>
+							</div>
+						)}
 					{memoryReport && (
 						<div>
 							<strong>{t('HomePage:memory-header-text')}</strong>
@@ -109,6 +117,9 @@ export default function HomePage() {
 							<div>
 								{t('HomePage:memory-static-allocations-text')}:{' '}
 								{memoryReport.staticAllocs}
+							</div>
+							<div>
+								{t('HomePage:memory-board-text')}: {memoryReport.physicalFlash}
 							</div>
 						</div>
 					)}

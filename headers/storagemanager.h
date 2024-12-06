@@ -44,11 +44,12 @@ public:
 	AddonOptions& getAddonOptions() { return config.addonOptions; }
 	AnimationOptions_Proto& getAnimationOptions() { return config.animationOptions; }
 	ProfileOptions& getProfileOptions() { return config.profileOptions; }
-	GpioAction* getProfilePinMappings() { return functionalPinMappings; }
+	GpioMappingInfo* getProfilePinMappings() { return functionalPinMappings; }
 	PeripheralOptions& getPeripheralOptions() { return config.peripheralOptions; }
 
 	void init();
 	bool save();
+	bool save(const bool force);
 
 	// Perform saves that were enqueued from core1
 	void performEnqueuedSaves();
@@ -64,12 +65,11 @@ public:
 	void SetProcessedGamepad(Gamepad *); // MPGS Processed Gamepad Get/Set
 	Gamepad * GetProcessedGamepad();
 
-	void SetFeatureData(uint8_t *); 	// USB Feature Data Get/Set
-	void ClearFeatureData();
-	uint8_t * GetFeatureData();
-
-	void setProfile(const uint32_t);		// profile support for multiple mappings
+	bool setProfile(const uint32_t);		// profile support for multiple mappings
+	void nextProfile();
+	void previousProfile();
 	void setFunctionalPinMappings();
+	char* currentProfileLabel();
 
 	void ResetSettings(); 				// EEPROM Reset Feature
 
@@ -85,7 +85,7 @@ private:
 	critical_section_t animationOptionsCs;
 	uint32_t animationOptionsCrc = 0;
 	AnimationOptions animationOptionsToSave = {};
-	GpioAction functionalPinMappings[NUM_BANK0_GPIOS];
+	GpioMappingInfo functionalPinMappings[NUM_BANK0_GPIOS];
 };
 
 #endif

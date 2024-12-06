@@ -1,5 +1,5 @@
 import React, { useContext, useEffect } from 'react';
-import { Dropdown } from 'react-bootstrap';
+import { Dropdown, DropdownButton } from 'react-bootstrap';
 import { AppContext } from '../Contexts/AppContext';
 import { useTranslation } from 'react-i18next';
 import GlobeIcon from '../Icons/Globe';
@@ -7,12 +7,16 @@ import UsFlag from '../Icons/Flags/Us';
 import zhCNFlag from '../Icons/Flags/zhCN';
 import ptBRFlag from '../Icons/Flags/ptBR';
 import deDEFlag from '../Icons/Flags/De';
+import jaJPFlag from '../Icons/Flags/jaJP';
+import krKOFlag from '../Icons/Flags/koKR';
 
 const dropdownOptions = [
 	{ code: 'en', icon: UsFlag },
 	{ code: 'pt-BR', icon: ptBRFlag },
 	{ code: 'zh-CN', icon: zhCNFlag },
 	{ code: 'de-DE', icon: deDEFlag },
+	{ code: 'ja-JP', icon: jaJPFlag },
+	{ code: 'ko-KR', icon: krKOFlag },
 ];
 
 const LanguageSelector = () => {
@@ -37,25 +41,19 @@ const LanguageSelector = () => {
 	};
 
 	return (
-		<Dropdown>
-			<Dropdown.Toggle variant="secondary" style={{ marginRight: '7px' }}>
-				<GlobeIcon />
-			</Dropdown.Toggle>
-
-			<Dropdown.Menu>
-				{dropdownOptions.map((option) => (
-					<Dropdown.Item
-						key={option.code}
-						className={`dropdown-item ${
-							savedLanguage === option.code ? 'active' : ''
-						}`}
-						onClick={() => setLanguageAndState(option.code)}
-					>
-						<option.icon /> {t(`language-selector.${option.code}`)}
-					</Dropdown.Item>
-				))}
-			</Dropdown.Menu>
-		</Dropdown>
+		<DropdownButton variant="secondary" align="end" title={<GlobeIcon />}>
+			{dropdownOptions.map((option) => (
+				<Dropdown.Item
+					key={option.code}
+					className={`dropdown-item ${
+						savedLanguage === option.code ? 'active' : ''
+					}`}
+					onClick={() => setLanguageAndState(option.code)}
+				>
+					<option.icon /> {t(`language-selector.${option.code}`)}
+				</Dropdown.Item>
+			))}
+		</DropdownButton>
 	);
 };
 

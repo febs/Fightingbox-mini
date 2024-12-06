@@ -34,6 +34,12 @@ enum ButtonLayout
     BUTTON_LAYOUT_GITADORA_FRET_A = 25;
     BUTTON_LAYOUT_GITADORA_STRUM_A = 26;
     BUTTON_LAYOUT_BOARD_DEFINED_A = 27;
+    BUTTON_LAYOUT_BANDHERO_FRET_A = 28;
+    BUTTON_LAYOUT_BANDHERO_STRUM_A = 29;
+    BUTTON_LAYOUT_6GAWD_A = 30;
+    BUTTON_LAYOUT_6GAWD_ALLBUTTON_A = 31;
+    BUTTON_LAYOUT_6GAWD_ALLBUTTONPLUS_A = 32;
+    BUTTON_LAYOUT_STICKLESS_R16 = 33;
 }
 
 enum ButtonLayoutRight
@@ -72,6 +78,12 @@ enum ButtonLayoutRight
     BUTTON_LAYOUT_GITADORA_FRET_B = 29;
     BUTTON_LAYOUT_GITADORA_STRUM_B = 30;
     BUTTON_LAYOUT_BOARD_DEFINED_B = 31;
+    BUTTON_LAYOUT_BANDHERO_FRET_B = 32;
+    BUTTON_LAYOUT_BANDHERO_STRUM_B = 33;
+    BUTTON_LAYOUT_6GAWD_B = 34;
+    BUTTON_LAYOUT_6GAWD_ALLBUTTON_B = 35;
+    BUTTON_LAYOUT_6GAWD_ALLBUTTONPLUS_B = 36;
+    BUTTON_LAYOUT_STICKLESS_R16B = 37;
 }
 
 enum SplashMode
@@ -99,7 +111,7 @@ enum SplashChoice
 enum OnBoardLedMode
 {
     option (nanopb_enumopt).long_names = false;
-    
+
     ON_BOARD_LED_MODE_OFF = 0;
     ON_BOARD_LED_MODE_MODE_INDICATOR = 1;
     ON_BOARD_LED_MODE_INPUT_TEST = 2;
@@ -112,7 +124,7 @@ enum InputMode
 
     INPUT_MODE_XINPUT = 0;
     INPUT_MODE_SWITCH = 1;
-    INPUT_MODE_HID = 2;
+    INPUT_MODE_PS3 = 2;
     INPUT_MODE_KEYBOARD = 3;
     INPUT_MODE_PS4 = 4;
     INPUT_MODE_XBONE = 5;
@@ -124,6 +136,7 @@ enum InputMode
     INPUT_MODE_PSCLASSIC = 11;
     INPUT_MODE_XBOXORIGINAL = 12;
     INPUT_MODE_PS5 = 13;
+    INPUT_MODE_GENERIC = 14;
     INPUT_MODE_CONFIG = 255;
 }
 
@@ -215,6 +228,47 @@ enum GpioAction
     BUTTON_PRESS_MACRO_4         = 37;
     BUTTON_PRESS_MACRO_5         = 38;
     BUTTON_PRESS_MACRO_6         = 39;
+    CUSTOM_BUTTON_COMBO          = 40;
+    BUTTON_PRESS_A3              = 41;
+    BUTTON_PRESS_A4              = 42;
+    BUTTON_PRESS_E1              = 43;
+    BUTTON_PRESS_E2              = 44;
+    BUTTON_PRESS_E3              = 45;
+    BUTTON_PRESS_E4              = 46;
+    BUTTON_PRESS_E5              = 47;
+    BUTTON_PRESS_E6              = 48;
+    BUTTON_PRESS_E7              = 49;
+    BUTTON_PRESS_E8              = 50;
+    BUTTON_PRESS_E9              = 51;
+    BUTTON_PRESS_E10             = 52;
+    BUTTON_PRESS_E11             = 53;
+    BUTTON_PRESS_E12             = 54;
+
+    DIGITAL_DIRECTION_UP         = 55;
+    DIGITAL_DIRECTION_DOWN       = 56;
+    DIGITAL_DIRECTION_LEFT       = 57;
+    DIGITAL_DIRECTION_RIGHT      = 58;
+    ANALOG_DIRECTION_LS_X_NEG    = 59;
+    ANALOG_DIRECTION_LS_X_POS    = 60;
+    ANALOG_DIRECTION_LS_Y_NEG    = 61;
+    ANALOG_DIRECTION_LS_Y_POS    = 62;
+    ANALOG_DIRECTION_RS_X_NEG    = 63;
+    ANALOG_DIRECTION_RS_X_POS    = 64;
+    ANALOG_DIRECTION_RS_Y_NEG    = 65;
+    ANALOG_DIRECTION_RS_Y_POS    = 66;
+    ANALOG_DIRECTION_MOD_LOW     = 67;
+    ANALOG_DIRECTION_MOD_HIGH    = 68;
+
+    BUTTON_PRESS_INPUT_REVERSE   = 69;
+    SUSTAIN_FOCUS_MODE           = 70;
+}
+
+enum GpioDirection
+{
+    option (nanopb_enumopt).long_names = false;
+
+    GPIO_DIRECTION_INPUT = 0;
+    GPIO_DIRECTION_OUTPUT = 1;
 }
 
 enum GamepadHotkey
@@ -256,6 +310,15 @@ enum GamepadHotkey
     HOTKEY_S2_BUTTON             = 32;
     HOTKEY_A1_BUTTON             = 33;
     HOTKEY_A2_BUTTON             = 34;
+    HOTKEY_NEXT_PROFILE          = 35;
+    HOTKEY_A3_BUTTON             = 36;
+    HOTKEY_A4_BUTTON             = 37;
+    HOTKEY_DPAD_UP               = 38;
+    HOTKEY_DPAD_DOWN             = 39;
+    HOTKEY_DPAD_LEFT             = 40;
+    HOTKEY_DPAD_RIGHT            = 41;
+    HOTKEY_PREVIOUS_PROFILE      = 42;
+    HOTKEY_SAVE_CONFIG           = 43;
 }
 
 // This has to be kept in sync with LEDFormat in NeoPico.hpp
@@ -278,7 +341,7 @@ enum ShmupMixMode
 enum PLEDType
 {
     option (nanopb_enumopt).long_names = false;
-    
+
     PLED_TYPE_NONE = -1;
     PLED_TYPE_PWM = 0;
     PLED_TYPE_RGB = 1;
@@ -287,7 +350,7 @@ enum PLEDType
 enum ForcedSetupMode
 {
     option (nanopb_enumopt).long_names = false;
-    
+
 	FORCED_SETUP_MODE_OFF = 0;
 	FORCED_SETUP_MODE_LOCK_MODE_SWITCH = 1;
 	FORCED_SETUP_MODE_LOCK_WEB_CONFIG = 2;
@@ -307,7 +370,7 @@ enum DualDirectionalCombinationMode
 enum PS4ControllerType
 {
     option (nanopb_enumopt).long_names = false;
-    
+
     PS4_CONTROLLER = 0;
     PS4_ARCADESTICK = 7;
 }
@@ -339,10 +402,10 @@ enum GPElement
 enum GPShape_Type
 {
     option (nanopb_enumopt).long_names = false;
-    
+
     GP_SHAPE_ELLIPSE = 0;
     GP_SHAPE_SQUARE = 1;
-    GP_SHAPE_DIAMOND = 2;
+    GP_SHAPE_LINE = 2;
     GP_SHAPE_POLYGON = 3;
     GP_SHAPE_ARC = 4;
 };
@@ -360,4 +423,22 @@ enum RotaryEncoderPinMode
     ENCODER_MODE_RIGHT_TRIGGER = 6;
     ENCODER_MODE_DPAD_X = 7;
     ENCODER_MODE_DPAD_Y = 8;
+};
+
+enum ReactiveLEDMode
+{
+    option (nanopb_enumopt).long_names = false;
+
+    REACTIVE_LED_STATIC_OFF = 0;
+    REACTIVE_LED_STATIC_ON = 1;
+    REACTIVE_LED_FADE_IN = 2;
+    REACTIVE_LED_FADE_OUT = 3;
+};
+
+enum PS4ControllerIDMode
+{
+    option (nanopb_enumopt).long_names = false;
+
+    PS4_ID_CONSOLE = 0;
+    PS4_ID_EMULATION = 1;
 };

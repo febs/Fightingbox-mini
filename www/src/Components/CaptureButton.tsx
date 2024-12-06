@@ -94,7 +94,7 @@ const CaptureButton = ({
 				</Modal.Body>
 				<Modal.Footer>
 					{hasNext && (
-						<Button variant="secondary" onClick={() => skipButton()}>
+						<Button onClick={() => skipButton()}>
 							{t('CaptureButton:capture-button-modal-skip')}
 						</Button>
 					)}
@@ -103,14 +103,14 @@ const CaptureButton = ({
 					</Button>
 				</Modal.Footer>
 			</Modal>
-			<Button variant="secondary" onClick={() => setTriggerCapture(true)}>
+			<Button onClick={() => setTriggerCapture(true)}>
 				{small
 					? '🎮'
 					: `${
 							buttonLabel
 								? buttonLabel
 								: t('CaptureButton:capture-button-button-label')
-					  } 🎮`}
+						} 🎮`}
 			</Button>
 		</>
 	);
